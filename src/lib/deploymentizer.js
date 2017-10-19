@@ -61,12 +61,6 @@ class Deploymentizer {
 	 */
   process() {
     return Promise.coroutine(function*() {
-      if (this.options.clusterName && this.options.clusterType) {
-        throw new Error(
-          "You cannot set both clusterName and clusterType at the same time"
-        );
-      }
-
       if (this.options.deployId && !this.options.resource) {
         throw new Error(
           "You must include the resource if deploying a specific id"

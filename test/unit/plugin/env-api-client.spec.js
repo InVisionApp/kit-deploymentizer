@@ -255,7 +255,11 @@ describe("ENV API Client Configuration plugin", () => {
           });
         });
         var rp = sinon.stub();
-        rp.onFirstCall().returns(responseOne).onSecondCall().returns({});
+        rp
+          .onFirstCall()
+          .returns(responseOne)
+          .onSecondCall()
+          .returns({});
         const options = {
           apiUrl: "http://somehost/v1",
           apiToken: "SOME-TOKEN"
