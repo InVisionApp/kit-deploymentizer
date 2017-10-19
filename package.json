@@ -1,7 +1,8 @@
 {
   "name": "kit-deploymentizer",
   "version": "0.0.0-semantic-release",
-  "description": "This will be a docker image that will intelligently build deployment files as to allow reusability of environment variables and other forms of configuration. It will also support aggregating these deployments for multiple clusters. In the end, it will generate a list of clusters and a list of deployment files for each of these clusters.",
+  "description":
+    "This will be a docker image that will intelligently build deployment files as to allow reusability of environment variables and other forms of configuration. It will also support aggregating these deployments for multiple clusters. In the end, it will generate a list of clusters and a list of deployment files for each of these clusters.",
   "repository": {
     "type": "git",
     "url": "git://github.com/InVisionApp/kit-deploymentizer"
@@ -43,10 +44,10 @@
     "chai": "3.5.0",
     "mocha": "2.4.5",
     "sinon": "1.17.6",
-    "eslint": "4.4.1",
-    "eslint-config-prettier": "2.3.0",
-    "eslint-plugin-prettier": "2.1.2",
-    "prettier": "1.5.3",
+    "eslint": "4.9.0",
+    "eslint-config-prettier": "2.6.0",
+    "eslint-plugin-prettier": "2.3.1",
+    "prettier": "1.7.4",
     "mockery": "2.1.0"
   },
   "files": ["LICENSE", "src"]
