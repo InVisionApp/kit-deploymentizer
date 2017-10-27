@@ -1,4 +1,4 @@
-FROM quay.io/invision/alpine-node:5.5.0
+FROM node:6.11.5-alpine
 
 # Install node modules (allows for npm install to be cached until package.json changes)
 COPY .npmrc .npmrc
