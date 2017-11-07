@@ -117,16 +117,28 @@ class Deploymentizer {
         this.paths.cluster
       );
 
-      if (this.options.elroyUrl && this.options.elroySecret) {
+      if (
+        this.options.elroyUrl &&
+        this.options.elroySecret &&
+        this.options.elroyOnly
+      ) {
         this.events.emitInfo(`Saving to elroy is enabled`);
-        this.events.emitInfo(`Checking for environments to deactivate`);
-        yield ElroySync.RemoveDeploymentEnvironments(
-          clusterDefs,
-          this.events,
-          this.options
-        );
+        if (this.options.clusterName || this.options.clusterType) {
+          this.events.emitInfo(
+            `Skipping deactivating clusters since clusterType ${this.options
+              .clusterType} or clusterName ${this.options.clusterName} is set`
+          );
+        } else {
+          this.events.emitInfo(`Checking for environments to deactivate`);
+          yield ElroySync.RemoveDeploymentEnvironments(
+            clusterDefs,
+            this.events,
+            this.options
+          );
+        }
+      } else {
+        this.events.emitInfo(`Syncing active clusters to elroy is disabled...`);
       }
-
       //Merge the definitions, render templates and save (if enabled)
       let processClusters = [];
       for (let i = 0; i < clusterDefs.length; i++) {
