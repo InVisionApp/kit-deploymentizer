@@ -5,7 +5,7 @@ const request = require("request-promise");
 const errors = require("request-promise/errors");
 const Promise = require("bluebird");
 
-const MaxCount = 300;
+const MaxCount = 500;
 
 /**
  * Handles Syncing Clusters to Elroy
@@ -36,7 +36,20 @@ class ElroySync {
           events.emitFatal(
             `DeploymentEnvironments returned to many Environments: ${res.count}`
           );
+          return;
         }
+        // If we load to few clusters from the file systems, something is wrong. Typically only 1-2 clusters
+        // are deactivated at any one time, but the res contains existing inactive clusters - approx 15 at last check.
+        // this is not ideal, but should keep a mass in activation from happening.
+        if (clusterDefs.length < res.count - 50) {
+          events.emitInfo(
+            `To few cluster definitions to process ${clusterDefs.length} vs returned environments ${res.count}, skipping...`
+          );
+          return;
+        }
+        events.emitInfo(
+          `Checking ${res.count} Clusters against definitions ${clusterDefs.length}`
+        );
         let toDeactivate = [];
         res.items.forEach(function(deployEnv) {
           let found = _.some(clusterDefs, [
@@ -131,7 +144,7 @@ class ElroySync {
       json: true
     })
       .then(res => {
-        events.emitDebug(
+        events.emitInfo(
           `Successfully updated Cluster ${cluster.name} to Elroy`
         );
         return res;
