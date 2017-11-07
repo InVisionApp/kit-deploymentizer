@@ -117,7 +117,11 @@ class Deploymentizer {
         this.paths.cluster
       );
 
-      if (this.options.elroyUrl && this.options.elroySecret) {
+      if (
+        this.options.elroyUrl &&
+        this.options.elroySecret &&
+        this.options.elroyOnly
+      ) {
         this.events.emitInfo(`Saving to elroy is enabled`);
         if (this.options.clusterName || this.options.clusterType) {
           this.events.emitInfo(
@@ -132,8 +136,10 @@ class Deploymentizer {
             this.options
           );
         }
+      } else {
+        this.events.emitInfo(`Syncing active clusters to elroy is disabled...`);
       }
-
+      return;
       //Merge the definitions, render templates and save (if enabled)
       let processClusters = [];
       for (let i = 0; i < clusterDefs.length; i++) {
