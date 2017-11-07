@@ -139,7 +139,6 @@ class Deploymentizer {
       } else {
         this.events.emitInfo(`Syncing active clusters to elroy is disabled...`);
       }
-      return;
       //Merge the definitions, render templates and save (if enabled)
       let processClusters = [];
       for (let i = 0; i < clusterDefs.length; i++) {
