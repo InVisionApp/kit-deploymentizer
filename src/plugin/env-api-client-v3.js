@@ -24,7 +24,7 @@ class EnvApiClient {
     }
     this.apiUrl = options.apiUrl;
     if (process.env.ENVAPI_URL && process.env.ENVAPI_URL.length > 0) {
-			this.apiUrl = process.env.ENVAPI_URL;
+      this.apiUrl = process.env.ENVAPI_URL;
     }
     this.timeout = options.timeout || 15000;
     this.defaultBranch = options.defaultBranch || "master";
