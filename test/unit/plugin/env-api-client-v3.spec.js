@@ -30,6 +30,19 @@ describe("ENV API Client Configuration plugin", () => {
       delete process.env.ENVAPI_ACCESS_TOKEN;
       done();
     });
+    it("should use ENV value for url", done => {
+      process.env.ENVAPI_ACCESS_TOKEN = "xxxxx-xxx-xxx";
+      process.env.ENVAPI_URL = "http://new-url.com/api/v3";
+      const options = { apiUrl: "http://somehost/api/v3", timeout: 20000 };
+      const apiConfig = new ApiConfig(options);
+      expect(apiConfig).to.exist;
+      expect(apiConfig.apiToken).to.equal("xxxxx-xxx-xxx");
+      expect(apiConfig.apiUrl).to.equal("http://new-url.com/api/v3");
+      expect(apiConfig.timeout).to.equal(20000);
+      delete process.env.ENVAPI_ACCESS_TOKEN;
+      delete process.env.ENVAPI_URL;
+      done();
+    });
   });
 
   describe("Invoke Client", () => {
