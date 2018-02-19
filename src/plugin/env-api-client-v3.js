@@ -23,6 +23,10 @@ class EnvApiClient {
       throw new Error("The apiUrl is a required configuration value.");
     }
     this.apiUrl = options.apiUrl;
+    if (process.env.ENVAPI_URL && process.env.ENVAPI_URL.length > 0) {
+      this.apiUrl = process.env.ENVAPI_URL;
+      logger.warn(`Overriding ENV-API Url with: ${this.apiUrl}`);
+    }
     this.timeout = options.timeout || 15000;
     this.defaultBranch = options.defaultBranch || "master";
     this.request = rp;
