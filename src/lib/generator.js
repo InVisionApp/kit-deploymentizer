@@ -334,7 +334,7 @@ class Generator {
     if (imageSHAs.length > 0 && !_.includes(imageSHAs, commitId)) {
       let errString = `This kit manifest generation was for commitId '${commitId}', but none of the SHAs from images (${imageSHAs}) match that.`;
       if (logger) {
-        logger.emitError(errString);
+        logger.emitFatal(errString);
       }
       throw new Error(errString);
     }
