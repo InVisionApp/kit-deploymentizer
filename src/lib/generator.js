@@ -287,13 +287,11 @@ class Generator {
       }
 
       // make sure that at least one of the generated container images matches the commit SHA that spawned this
-      let commitId = this.options.commitId;
-      Generator._verifyImagesForCommitId(localConfig, commitId);
-      if (commitId) {
-        this.eventHandler.emitInfo(
-          `Verified that generated images are valid for commitId '${commitId}'`
-        );
-      }
+      Generator._verifyImagesForCommitId(
+        localConfig,
+        this.options.commitId,
+        this.eventHandler
+      );
 
       // if service info, append
       if (resource.svc) {
@@ -307,9 +305,10 @@ class Generator {
    * Verifies that the images being added here match the intended commit SHA
    * @param	{[type]} localConfig	the localConfig to validate
    * @param	{[type]} commitId	  	SHA from the deploy
+   * @param	{[type]} logger	  	  (optional) something capable of emitting log events
    * @return will throw an error if it's not valid
    */
-  static _verifyImagesForCommitId(localConfig, commitId) {
+  static _verifyImagesForCommitId(localConfig, commitId, logger) {
     if (!commitId) {
       return;
     }
@@ -333,8 +332,15 @@ class Generator {
     );
 
     if (imageSHAs.length > 0 && !_.includes(imageSHAs, commitId)) {
-      throw new Error(
-        `This kit manifest generation was for commitId '${commitId}', but none of the SHAs from images (${imageSHAs}) match that.`
+      let errString = `This kit manifest generation was for commitId '${commitId}', but none of the SHAs from images (${imageSHAs}) match that.`;
+      if (logger) {
+        logger.emitError(errString);
+      }
+      throw new Error(errString);
+    }
+    if (logger) {
+      logger.emitInfo(
+        `Verified that generated images are valid for commitId '${commitId}'`
       );
     }
   }
