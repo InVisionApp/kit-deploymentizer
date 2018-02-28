@@ -50,7 +50,7 @@ class Deploymentizer {
       clusterName: args.clusterName || undefined,
       deployId: args.deployId || undefined,
       fastRollback: args.fastRollback || false,
-      commitId: args.commitId
+      commitId: args.commitId || undefined
     };
     this.options.conf = this.parseConf(args.conf);
     this.events = new EventHandler();
