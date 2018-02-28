@@ -88,14 +88,17 @@ describe("Generator", () => {
   });
 
   describe("Local configuration", () => {
-    it("should create copy of config, merging in values from resource", done => {
-      const imageResources = {
-        "node-auth": {
-          testing: { image: "SOME-TESTING-IMAGE" },
-          develop: { image: "SOME-DEVELOP-IMAGE" }
-        }
-      };
+    const testingImage = "SOME-TESTING-IMAGE:branch-abc1";
+    const developImageSHA = "abc2";
+    const developImage = `SOME-DEVELOP-IMAGE:branch-${developImageSHA}`;
+    const imageResources = {
+      "node-auth": {
+        testing: { image: testingImage },
+        develop: { image: developImage }
+      }
+    };
 
+    it("should create copy of config, merging in values from resource", done => {
       const eventHandler = new EventHandler();
       return Promise.coroutine(function*() {
         const clusterDefs = yield yamlHandler.loadClusterDefinitions(
@@ -128,7 +131,7 @@ describe("Generator", () => {
         expect(localConfig.svc).to.exist;
         expect(localConfig).to.not.equal(clusterDef.configuration());
         expect(localConfig.name).to.equal("auth");
-        expect(localConfig["auth-con"].image).to.equal("SOME-DEVELOP-IMAGE");
+        expect(localConfig["auth-con"].image).to.equal(developImage);
         expect(localConfig["auth-con"].env).to.include({
           name: "test",
           value: "testvalue"
@@ -148,13 +151,6 @@ describe("Generator", () => {
     });
 
     it("should create copy of config, without plugin", done => {
-      const imageResources = {
-        "node-auth": {
-          testing: { image: "SOME-TESTING-IMAGE" },
-          develop: { image: "SOME-DEVELOP-IMAGE" }
-        }
-      };
-
       const eventHandler = new EventHandler();
       return Promise.coroutine(function*() {
         const clusterDefs = yield yamlHandler.loadClusterDefinitions(
@@ -187,7 +183,7 @@ describe("Generator", () => {
         expect(localConfig.svc).to.exist;
         expect(localConfig).to.not.equal(clusterDef.configuration());
         expect(localConfig["auth-con"].name).to.equal("auth");
-        expect(localConfig["auth-con"].image).to.equal("SOME-DEVELOP-IMAGE");
+        expect(localConfig["auth-con"].image).to.equal(developImage);
         expect(localConfig["auth-con"].env).to.include({
           name: "test",
           value: "testvalue"
@@ -196,6 +192,95 @@ describe("Generator", () => {
           name: "ENV_ONE",
           value: "value-one"
         });
+        done();
+      })().catch(err => {
+        done(err);
+      });
+    });
+
+    it("should succeed when commitId is specified", done => {
+      const eventHandler = new EventHandler();
+      return Promise.coroutine(function*() {
+        const clusterDefs = yield yamlHandler.loadClusterDefinitions(
+          "./test/fixture/clusters"
+        );
+        const clusterDef = clusterDefs[3];
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          undefined,
+          undefined,
+          eventHandler
+        );
+        expect(clusterDef).to.exist;
+        if (!fse.existsSync(path.join(os.tmpdir(), clusterDef.name()))) {
+          fse.mkdirsSync(path.join(os.tmpdir(), clusterDef.name()));
+        }
+        // we add the image tag here, since we dont preload the base cluster def in this test
+        clusterDef.resources().auth.containers["auth-con"].image_tag =
+          "node-auth";
+        const localConfig = yield generator._createLocalConfiguration(
+          clusterDef.configuration(),
+          "auth",
+          clusterDef.resources().auth
+        );
+        expect(localConfig).to.exist;
+        done();
+      })().catch(err => {
+        done(err);
+      });
+    });
+  });
+
+  describe("Verifying commit SHA", () => {
+    const resourceConfig = {
+      con1: {
+        image: "image1:branch-abc1"
+      },
+      con2: {
+        image: "image2:branch-abc2"
+      }
+    };
+
+    it("should ignore blank commitId", done => {
+      return Promise.coroutine(function*() {
+        Generator._verifyImagesForCommitId(resourceConfig);
+        Generator._verifyImagesForCommitId(resourceConfig, null);
+        done();
+      })().catch(err => {
+        done(err);
+      });
+    });
+
+    it("should ignore a ResourceConfig with no containers", done => {
+      return Promise.coroutine(function*() {
+        Generator._verifyImagesForCommitId({}, "abc1");
+        done();
+      })().catch(err => {
+        done(err);
+      });
+    });
+
+    it("should fail for the wrong commitId", done => {
+      return Promise.coroutine(function*() {
+        Generator._verifyImagesForCommitId(resourceConfig, "wrong");
+        done(
+          new Error(
+            "Expected _verifyImagesForCommitId to throw an error because it was for the wrong commitId."
+          )
+        );
+      })().catch(err => {
+        done();
+      });
+    });
+
+    it("should succeed for the right commitId(s)", done => {
+      return Promise.coroutine(function*() {
+        Generator._verifyImagesForCommitId(resourceConfig, "abc1");
+        Generator._verifyImagesForCommitId(resourceConfig, "abc2");
         done();
       })().catch(err => {
         done(err);

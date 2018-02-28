@@ -48,6 +48,7 @@ class Generator {
 	 * @param	{[type]} eventHandler 		to log events to
 	 * @param	{[type]} deployId								deployId to use when generating manifests, switch to uuid from elroy
 	 * @param	{[type]} fastRollback			determines if fastRollback support is enabled. used by manifest generation
+	 * @param	{[type]} commitId   			(optional) The SHA of the commit that originated this generation request
 	 */
   constructor(
     clusterDef,
@@ -59,7 +60,8 @@ class Generator {
     resource,
     eventHandler,
     deployId,
-    fastRollback
+    fastRollback,
+    commitId
   ) {
     this.options = {
       clusterDef: clusterDef,
@@ -69,7 +71,8 @@ class Generator {
       save: save || false,
       resource: resource || undefined,
       deployId: deployId || undefined,
-      fastRollback: fastRollback || false
+      fastRollback: fastRollback || false,
+      commitId: commitId || undefined
     };
     this.configPlugin = configPlugin;
     this.eventHandler = eventHandler;
@@ -283,12 +286,63 @@ class Generator {
         }
       }
 
+      // make sure that at least one of the generated container images matches the commit SHA that spawned this
+      Generator._verifyImagesForCommitId(
+        localConfig,
+        this.options.commitId,
+        this.eventHandler
+      );
+
       // if service info, append
       if (resource.svc) {
         localConfig.svc = resource.svc;
       }
       return localConfig;
     }).bind(this)();
+  }
+
+  /**
+   * Verifies that the images being added here match the intended commit SHA
+   * @param	{[type]} localConfig	the localConfig to validate
+   * @param	{[type]} commitId	  	SHA from the deploy
+   * @param	{[type]} logger	  	  (optional) something capable of emitting log events
+   * @return will throw an error if it's not valid
+   */
+  static _verifyImagesForCommitId(localConfig, commitId, logger) {
+    if (!commitId) {
+      return;
+    }
+    const imageSHARegex = /:.+-([a-f0-9]+)/i;
+    let imageSHAs = _.reduce(
+      localConfig,
+      function(result, value, key) {
+        if (_.has(value, "image")) {
+          let match = imageSHARegex.exec(value.image || "");
+          if (!match || match.length < 1) {
+            return result;
+          }
+          let imageSHA = match[1];
+          if (imageSHA) {
+            result.push(imageSHA);
+          }
+        }
+        return result;
+      },
+      []
+    );
+
+    if (imageSHAs.length > 0 && !_.includes(imageSHAs, commitId)) {
+      let errString = `This kit manifest generation was for commitId '${commitId}', but none of the SHAs from images (${imageSHAs}) match that.`;
+      if (logger) {
+        logger.emitFatal(errString);
+      }
+      throw new Error(errString);
+    }
+    if (logger) {
+      logger.emitInfo(
+        `Verified that generated images are valid for commitId '${commitId}'`
+      );
+    }
   }
 
   /**
