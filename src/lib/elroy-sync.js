@@ -82,38 +82,50 @@ class ElroySync {
       const cluster = _self.populateCluster(def);
 
       events.emitDebug(`Saving Cluster ${cluster.name} to Elroy...`);
-      return _self.createCluster(cluster, events, options).catch(reason => {
-        if (reason.response && reason.response.statusCode) {
-          // If error is because it already exists, lets do an update
-          if (reason.response.statusCode == 409) {
-            return _self.updateCluster(cluster, events, options);
+      return _self
+        .retrieveCluster(cluster, events, options)
+        .then(res => {
+          return _self.updateCluster(cluster, events, options);
+        })
+        .catch(reason => {
+          if (reason.response && reason.response.statusCode) {
+            if (reason.response.statusCode == 404) {
+              return _self.createCluster(cluster, events, options);
+            }
           }
-          // validation problem , ie the tier doesn't exists
-          if (reason.response.statusCode == 404) {
-            events.emitDebug(
-              `Problem syncing the cluster ${cluster.name} with tier ${cluster.tier} to Elroy: 404`
-            );
-            return;
-          }
-          if (!retryCount) {
-            retryCount = 0;
-          }
-          if (reason.response.statusCode >= 502 && retryCount < 3) {
-            retryCount++;
-            events.emitWarn(
-              `Problem syncing the cluster ${cluster.name} with tier ${cluster.tier} to Elroy: ${reason
-                .response.statusCode}, retrying ${retryCount}`
-            );
-            return Promise.delay(500).then(() => {
-              return _self.SaveToElroy(def, events, options, retryCount);
-            });
-          }
-        }
-        events.emitWarn(
-          `Error adding Cluster ${cluster.name} to Elroy: ${reason}`
-        );
-        throw reason;
-      });
+        });
+      // return _self.createCluster(cluster, events, options).catch(reason => {
+      //   if (reason.response && reason.response.statusCode) {
+      //     // If error is because it already exists, lets do an update
+      //     if (reason.response.statusCode == 409) {
+      //       return _self.updateCluster(cluster, events, options);
+      //     }
+      //     // validation problem , ie the tier doesn't exists
+      //     if (reason.response.statusCode == 404) {
+      //       events.emitDebug(
+      //         `Problem syncing the cluster ${cluster.name} with tier ${cluster.tier} to Elroy: 404`
+      //       );
+      //       return;
+      //     }
+      //     if (!retryCount) {
+      //       retryCount = 0;
+      //     }
+      //     if (reason.response.statusCode >= 502 && retryCount < 3) {
+      //       retryCount++;
+      //       events.emitWarn(
+      //         `Problem syncing the cluster ${cluster.name} with tier ${cluster.tier} to Elroy: ${reason
+      //           .response.statusCode}, retrying ${retryCount}`
+      //       );
+      //       return Promise.delay(500).then(() => {
+      //         return _self.SaveToElroy(def, events, options, retryCount);
+      //       });
+      //     }
+      //   }
+      //   events.emitWarn(
+      //     `Error adding Cluster ${cluster.name} to Elroy: ${reason}`
+      //   );
+      //   throw reason;
+      // });
     });
   }
 
@@ -154,6 +166,29 @@ class ElroySync {
           `Error updating Cluster ${cluster.name} to Elroy: ${updateReason}`
         );
         throw updateReason;
+      });
+  }
+
+  static retrieveCluster(cluster, events, options) {
+    return request({
+      method: "GET",
+      uri: options.elroyUrl + "/api/v1/deployment-environment/" + cluster.name,
+      headers: {
+        "X-Auth-Token": options.elroySecret
+      },
+      json: true
+    })
+      .then(res => {
+        events.emitInfo(
+          `Successfully retrieved Cluster ${cluster.name} from Elroy`
+        );
+        return res;
+      })
+      .catch(res => {
+        events.emitWarn(
+          `Error retrieving Cluster ${cluster.name} to Elroy: ${res}`
+        );
+        throw res;
       });
   }
 
