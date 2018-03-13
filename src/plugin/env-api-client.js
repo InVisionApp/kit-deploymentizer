@@ -86,9 +86,10 @@ class EnvApiClient extends EventEmitter {
       let query = { env: cluster.name() };
 
       let tags = {
-        kitserver_envapi_cluster: query.env,
-        kitserver_envapi_resource: service.name,
-        kitserver_envapi_version: "v2"
+        app: "kit_deploymentizer",
+        envapi_cluster: query.env,
+        envapi_resource: service.name,
+        envapi_version: "v2"
       };
 
       // if a branch is specified pass that along
@@ -129,12 +130,12 @@ class EnvApiClient extends EventEmitter {
       logger.fatal(`Unable to fetch or convert ENV Config ${errStr}`);
 
       let tags = {
-        kitserver_envapi_version: "v2",
-        kitserver_envapi_resource:
-          service.annotations[EnvApiClient.annotationServiceName]
+        app: "kit_deploymentizer",
+        envapi_version: "v2",
+        envapi_resource: service.annotations[EnvApiClient.annotationServiceName]
       };
       if (typeof cluster !== "string") {
-        tags.kitserver_envapi_cluster = cluster.name();
+        tags.envapi_cluster = cluster.name();
       }
       self.emit("metric", {
         kind: "event",

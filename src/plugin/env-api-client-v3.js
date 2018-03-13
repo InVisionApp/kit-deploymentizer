@@ -123,10 +123,11 @@ class EnvApiClient extends EventEmitter {
       };
 
       let tags = {
-        kitserver_envapi_environment: params.environment,
-        kitserver_envapi_cluster: params.cluster,
-        kitserver_envapi_service: params.service,
-        kitserver_envapi_version: "v3"
+        app: "kit_deploymentizer",
+        envapi_environment: params.environment,
+        envapi_cluster: params.cluster,
+        envapi_service: params.service,
+        envapi_version: "v3"
       };
 
       return this.callv3Api(params)
@@ -186,17 +187,18 @@ class EnvApiClient extends EventEmitter {
       }
 
       let tags = {
-        kitserver_envapi_service:
+        app: "kit_deploymentizer",
+        envapi_resource:
           service.annotations[EnvApiClient.annotationServiceName],
-        kitserver_envapi_version: "v3_v2"
+        envapi_version: "v3_v2"
       };
 
       if (typeof cluster === "object") {
         if (cluster.metadata && typeof cluster.metadata === "function") {
-          tags.kitserver_envapi_environment = cluster.metadata().environment;
+          tags.envapi_environment = cluster.metadata().environment;
         }
         if (cluster.name && typeof cluster.name === "function") {
-          tags.kitserver_envapi_cluster = cluster.name();
+          tags.envapi_cluster = cluster.name();
         }
       }
 
