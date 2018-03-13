@@ -3,6 +3,7 @@
 const Promise = require("bluebird");
 const rp = require("request-promise");
 const logger = require("log4js").getLogger();
+const envapiMetric = "envapi.call";
 
 /**
  * Class for accessing the EnvApi Service.
@@ -37,6 +38,7 @@ class EnvApiClient {
     ) {
       this.supportFallback = true;
     }
+    this.metrics = options.metrics;
   }
 
   /**
@@ -119,14 +121,33 @@ class EnvApiClient {
         cluster: cluster.name(),
         metadata: metadata
       };
+
+      let tags = {
+        kitserver_envapi_environment: params.environment,
+        kitserver_envapi_cluster: params.cluster,
+        kitserver_envapi_service: params.service,
+        kitserver_envapi_version: "v3"
+      };
+
       return this.callv3Api(params)
         .then(res => {
           if (res.status && res.status === "success") {
             let result = {};
             result = this.convertEnvResult(res.values, result);
+            if (this.metrics) {
+              this.metrics.increment(envapiMetric, 1, tags);
+            }
             return result;
           } else {
-            throw new Error(res.message || "No error message supplied");
+            const errStr = res.message || "No error message supplied";
+            if (this.metrics) {
+              this.metrics.event(
+                "envapi.error",
+                `Error getting envs with envapi v3: ${errStr}`,
+                tags
+              );
+            }
+            throw new Error(errStr);
           }
         })
         .catch(err => {
@@ -138,10 +159,23 @@ class EnvApiClient {
             );
             return this.callv1Api(this.defaultBranch, service, params.cluster)
               .then(result => {
+                if (this.metrics) {
+                  tags.kitserver_envapi_version = "v2";
+                  this.metrics.increment(envapiMetric, 1, tags);
+                }
                 return result;
               })
               .catch(err => {
-                logger.error("Fallback method error: " + JSON.stringify(err));
+                const errStr = JSON.stringify(err);
+                logger.error("Fallback method error: " + errStr);
+                if (this.metrics) {
+                  tags.kitserver_envapi_version = "v2";
+                  this.metrics.event(
+                    "envapi.error",
+                    `Error getting envs fallback to envapi v2: ${errStr}`,
+                    tags
+                  );
+                }
                 throw err;
               });
           } else {

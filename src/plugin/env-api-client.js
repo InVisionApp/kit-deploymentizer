@@ -3,6 +3,7 @@
 const Promise = require("bluebird");
 const rp = require("request-promise");
 const logger = require("log4js").getLogger();
+const envapiMetric = "envapi.call";
 
 /**
  * Class for accessing the EnvApi Service.
@@ -27,6 +28,7 @@ class EnvApiClient {
     this.timeout = options.timeout || 15000;
     this.k8sBranch = options.k8sBranch === true || false;
     this.request = rp;
+    this.metrics = options.metrics;
   }
 
   /**
@@ -78,16 +80,22 @@ class EnvApiClient {
           "Invalid argument for 'cluster', requires cluster object not string."
         );
       }
-      const uri = `${this.apiUrl}/${service.annotations[
-        EnvApiClient.annotationServiceName
-      ]}`;
+      const resource = service.annotations[EnvApiClient.annotationServiceName];
+      const uri = `${this.apiUrl}/${resource}`;
       let query = { env: cluster.name() };
+      let tags = {
+        kitserver_envapi_cluster: query.env,
+        kitserver_envapi_resource: service.name,
+        kitserver_envapi_version: "v2"
+      };
+
       // if a branch is specified pass that along
       if (
         service.annotations ||
         service.annotations[EnvApiClient.annotationBranchName]
       ) {
         query.branch = service.annotations[EnvApiClient.annotationBranchName];
+        tags.kitserver_envapi_branch = query.branch;
       }
       let options = {
         uri: uri,
@@ -105,12 +113,32 @@ class EnvApiClient {
         config = yield this.request(options);
       }
       result = this.convertEnvResult(config, result);
+
+      if (this.metrics) {
+        this.metrics.increment(envapiMetric, 1, tags);
+      }
+
       return result;
     }).bind(this)().catch(function(err) {
+      const errStr = JSON.stringify(err);
       // API call failed...
-      logger.fatal(
-        `Unable to fetch or convert ENV Config ${JSON.stringify(err)}`
-      );
+      logger.fatal(`Unable to fetch or convert ENV Config ${errStr}`);
+
+      if (this.metrics) {
+        let tags = {
+          kitserver_envapi_version: "v2",
+          kitserver_envapi_resource:
+            service.annotations[EnvApiClient.annotationServiceName]
+        };
+        if (typeof cluster !== "string") {
+          tags.kitserver_envapi_cluster = cluster.name();
+        }
+        this.metrics.event(
+          "envapi.error",
+          `Error getting envs with envapi: ${errStr}`,
+          tags
+        );
+      }
       throw err;
     });
   }
