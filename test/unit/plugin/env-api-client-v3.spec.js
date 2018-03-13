@@ -5,13 +5,21 @@ const Promise = require("bluebird");
 const sinon = require("sinon");
 const ClusterDefinition = require("../../../src/lib/cluster-definition");
 const ApiConfig = require("../../../src/plugin/env-api-client-v3");
+const EventEmitter = require("events").EventEmitter;
 
 describe("ENV API Client Configuration plugin", () => {
+  let emitter, ApiConfig;
+
+  before(() => {
+    process.env.ENVAPI_ACCESS_TOKEN = "sometoken";
+    emitter = new EventEmitter();
+    ApiConfig = require("../../../src/plugin/env-api-client");
+  });
+
   describe("Load Client", () => {
     it("should fail with validation error", done => {
       try {
         const options = { api: "http://somehost/v3" };
-        const ApiConfig = require("../../../src/plugin/env-api-client-v2");
         const apiConfig = new ApiConfig(options);
         done(new Error("Should have failed"));
       } catch (err) {

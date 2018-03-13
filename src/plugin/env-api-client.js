@@ -67,6 +67,7 @@ class EnvApiClient extends EventEmitter {
 	 * @return {[type]}             envs and configuration information
 	 */
   fetch(service, cluster) {
+    let self = this;
     return Promise.coroutine(function*() {
       if (
         !service.annotations ||
@@ -115,7 +116,7 @@ class EnvApiClient extends EventEmitter {
       }
       result = this.convertEnvResult(config, result);
 
-      this.emit("metric", {
+      self.emit("metric", {
         kind: "increment",
         name: "envapi.call",
         tags: tags
@@ -135,7 +136,7 @@ class EnvApiClient extends EventEmitter {
       if (typeof cluster !== "string") {
         tags.kitserver_envapi_cluster = cluster.name();
       }
-      this.emit("metric", {
+      self.emit("metric", {
         kind: "event",
         name: "envapi.error",
         text: `Error getting envs with envapi: ${errStr}`,
