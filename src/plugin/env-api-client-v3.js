@@ -188,10 +188,17 @@ class EnvApiClient extends EventEmitter {
       let tags = {
         kitserver_envapi_service:
           service.annotations[EnvApiClient.annotationServiceName],
-        kitserver_envapi_environment: cluster.metadata().environment,
-        kitserver_envapi_cluster: cluster.name(),
         kitserver_envapi_version: "v3_v2"
       };
+
+      if (typeof cluster === "object") {
+        if (cluster.metadata && typeof cluster.metadata === "function") {
+          tags.kitserver_envapi_environment = cluster.metadata().environment;
+        }
+        if (cluster.name && typeof cluster.name === "function") {
+          tags.kitserver_envapi_cluster = cluster.name();
+        }
+      }
 
       _self.emit("metric", {
         kind: "event",

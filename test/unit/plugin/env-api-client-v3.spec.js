@@ -12,7 +12,7 @@ describe("ENV API Client Configuration plugin", () => {
 
   before(() => {
     emitter = new EventEmitter();
-    ApiConfig = require("../../../src/plugin/env-api-client");
+    ApiConfig = require("../../../src/plugin/env-api-client-v3");
   });
 
   describe("Load Client", () => {
