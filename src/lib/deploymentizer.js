@@ -50,8 +50,7 @@ class Deploymentizer {
       clusterName: args.clusterName || undefined,
       deployId: args.deployId || undefined,
       fastRollback: args.fastRollback || false,
-      commitId: args.commitId || undefined,
-      metrics: args.metrics || undefined
+      commitId: args.commitId || undefined
     };
     this.options.conf = this.parseConf(args.conf);
     this.events = new EventHandler();
@@ -109,11 +108,9 @@ class Deploymentizer {
 
       let configPlugin = undefined;
       if (this.options.configPlugin) {
-        let pluginOpts = this.options.configPlugin.options;
-        pluginOpts.metrics = this.options.metrics;
         configPlugin = new PluginHandler(
           this.options.configPlugin.path,
-          pluginOpts
+          this.options.configPlugin.options
         );
       }
       // Load the /cluster 'cluster.yaml' and 'configuration-var.yaml'
@@ -265,8 +262,7 @@ class Deploymentizer {
           this.events,
           this.options.deployId,
           this.options.fastRollback,
-          this.options.commitId,
-          this.options.metrics
+          this.options.commitId
         );
         return Promise.all([elroyProm, generator.process()]);
       }

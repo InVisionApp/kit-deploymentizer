@@ -3,17 +3,18 @@
 const Promise = require("bluebird");
 const rp = require("request-promise");
 const logger = require("log4js").getLogger();
-const envapiMetric = "envapi.call";
+const EventEmitter = require("events");
 
 /**
  * Class for accessing the EnvApi Service.
  */
-class EnvApiClient {
+class EnvApiClient extends EventEmitter {
   /**
 	 * Requires the apiUrl and apiToken to be set included as parameters.
 	 * @param  {[type]} options
 	 */
   constructor(options) {
+    super();
     this.apiToken = process.env.ENVAPI_ACCESS_TOKEN;
     if (!this.apiToken) {
       throw new Error(
@@ -28,7 +29,6 @@ class EnvApiClient {
     this.timeout = options.timeout || 15000;
     this.k8sBranch = options.k8sBranch === true || false;
     this.request = rp;
-    this.metrics = options.metrics;
   }
 
   /**
@@ -83,6 +83,7 @@ class EnvApiClient {
       const resource = service.annotations[EnvApiClient.annotationServiceName];
       const uri = `${this.apiUrl}/${resource}`;
       let query = { env: cluster.name() };
+
       let tags = {
         kitserver_envapi_cluster: query.env,
         kitserver_envapi_resource: service.name,
@@ -114,9 +115,11 @@ class EnvApiClient {
       }
       result = this.convertEnvResult(config, result);
 
-      if (this.metrics) {
-        this.metrics.increment(envapiMetric, 1, tags);
-      }
+      this.emit("metric", {
+        kind: "increment",
+        name: "envapi.call",
+        tags: tags
+      });
 
       return result;
     }).bind(this)().catch(function(err) {
@@ -124,21 +127,20 @@ class EnvApiClient {
       // API call failed...
       logger.fatal(`Unable to fetch or convert ENV Config ${errStr}`);
 
-      if (this.metrics) {
-        let tags = {
-          kitserver_envapi_version: "v2",
-          kitserver_envapi_resource:
-            service.annotations[EnvApiClient.annotationServiceName]
-        };
-        if (typeof cluster !== "string") {
-          tags.kitserver_envapi_cluster = cluster.name();
-        }
-        this.metrics.event(
-          "envapi.error",
-          `Error getting envs with envapi: ${errStr}`,
-          tags
-        );
+      let tags = {
+        kitserver_envapi_version: "v2",
+        kitserver_envapi_resource:
+          service.annotations[EnvApiClient.annotationServiceName]
+      };
+      if (typeof cluster !== "string") {
+        tags.kitserver_envapi_cluster = cluster.name();
       }
+      this.emit("metric", {
+        kind: "event",
+        name: "envapi.error",
+        text: `Error getting envs with envapi: ${errStr}`,
+        tags: tags
+      });
       throw err;
     });
   }

@@ -3,12 +3,12 @@
 const Promise = require("bluebird");
 const rp = require("request-promise");
 const logger = require("log4js").getLogger();
-const envapiMetric = "envapi.call";
+const EventEmitter = require("events");
 
 /**
  * Class for accessing the EnvApi Service.
  */
-class EnvApiClient {
+class EnvApiClient extends EventEmitter {
   /**
 	 * Requires the apiUrl to be set as parameters. The ENVAPI_ACCESS_TOKEN is required as a ENV var.
 	 * @param  {[type]} options
@@ -38,7 +38,6 @@ class EnvApiClient {
     ) {
       this.supportFallback = true;
     }
-    this.metrics = options.metrics;
   }
 
   /**
@@ -134,19 +133,14 @@ class EnvApiClient {
           if (res.status && res.status === "success") {
             let result = {};
             result = this.convertEnvResult(res.values, result);
-            if (this.metrics) {
-              this.metrics.increment(envapiMetric, 1, tags);
-            }
+            self.emit("metric", {
+              kind: "increment",
+              name: "envapi.call",
+              tags: tags
+            });
             return result;
           } else {
             const errStr = res.message || "No error message supplied";
-            if (this.metrics) {
-              this.metrics.event(
-                "envapi.error",
-                `Error getting envs with envapi v3: ${errStr}`,
-                tags
-              );
-            }
             throw new Error(errStr);
           }
         })
@@ -159,23 +153,16 @@ class EnvApiClient {
             );
             return this.callv1Api(this.defaultBranch, service, params.cluster)
               .then(result => {
-                if (this.metrics) {
-                  tags.kitserver_envapi_version = "v2";
-                  this.metrics.increment(envapiMetric, 1, tags);
-                }
+                tags.kitserver_envapi_version = "v2";
+                this.emit("metric", {
+                  kind: "increment",
+                  name: "envapi.call",
+                  tags: tags
+                });
                 return result;
               })
               .catch(err => {
-                const errStr = JSON.stringify(err);
-                logger.error("Fallback method error: " + errStr);
-                if (this.metrics) {
-                  tags.kitserver_envapi_version = "v2";
-                  this.metrics.event(
-                    "envapi.error",
-                    `Error getting envs fallback to envapi v2: ${errStr}`,
-                    tags
-                  );
-                }
+                logger.error("Fallback method error: " + JSON.stringify(err));
                 throw err;
               });
           } else {
@@ -196,6 +183,21 @@ class EnvApiClient {
       ) {
         errMsg = _self.convertErrorResponse(err.response.body);
       }
+
+      let tags = {
+        service: service.annotations[EnvApiClient.annotationServiceName],
+        environment: cluster.metadata().environment,
+        cluster: cluster.name(),
+        kitserver_envapi_version: "v3_v2"
+      };
+
+      this.emit("metric", {
+        kind: "event",
+        name: "envapi.error",
+        text: `Error getting envs with envapi: ${errMsg}`,
+        tags: tags
+      });
+
       throw new Error(errMsg);
     });
   }
