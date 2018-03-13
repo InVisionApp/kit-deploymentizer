@@ -11,7 +11,6 @@ describe("ENV API Client Configuration plugin", () => {
   let emitter, ApiConfig;
 
   before(() => {
-    process.env.ENVAPI_ACCESS_TOKEN = "sometoken";
     emitter = new EventEmitter();
     ApiConfig = require("../../../src/plugin/env-api-client");
   });
