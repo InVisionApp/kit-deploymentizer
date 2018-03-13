@@ -14,6 +14,7 @@ class EnvApiClient extends EventEmitter {
 	 * @param  {[type]} options
 	 */
   constructor(options) {
+    super();
     this.apiToken = process.env.ENVAPI_ACCESS_TOKEN;
     if (!this.apiToken) {
       throw new Error(
@@ -133,7 +134,7 @@ class EnvApiClient extends EventEmitter {
           if (res.status && res.status === "success") {
             let result = {};
             result = this.convertEnvResult(res.values, result);
-            self.emit("metric", {
+            _self.emit("metric", {
               kind: "increment",
               name: "envapi.call",
               tags: tags
@@ -192,7 +193,7 @@ class EnvApiClient extends EventEmitter {
         kitserver_envapi_version: "v3_v2"
       };
 
-      this.emit("metric", {
+      _self.emit("metric", {
         kind: "event",
         name: "envapi.error",
         text: `Error getting envs with envapi: ${errMsg}`,
