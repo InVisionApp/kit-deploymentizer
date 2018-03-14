@@ -3,12 +3,11 @@
 const Promise = require("bluebird");
 const rp = require("request-promise");
 const logger = require("log4js").getLogger();
-const EventEmitter = require("events");
 
 /**
  * Class for accessing the EnvApi Service.
  */
-class EnvApiClient extends EventEmitter {
+class EnvApiClient {
   /**
 	 * Requires the apiUrl to be set as parameters. The ENVAPI_ACCESS_TOKEN is required as a ENV var.
 	 * @param  {[type]} options
@@ -39,6 +38,7 @@ class EnvApiClient extends EventEmitter {
     ) {
       this.supportFallback = true;
     }
+    this.events = options.events || undefined;
   }
 
   /**
@@ -135,11 +135,13 @@ class EnvApiClient extends EventEmitter {
           if (res.status && res.status === "success") {
             let result = {};
             result = this.convertEnvResult(res.values, result);
-            _self.emit("metric", {
-              kind: "increment",
-              name: "envapi.call",
-              tags: tags
-            });
+            if (_self.options.events) {
+              _self.options.events.emitMetric({
+                kind: "increment",
+                name: "envapi.call",
+                tags: tags
+              });
+            }
             return result;
           } else {
             const errStr = res.message || "No error message supplied";
@@ -155,12 +157,14 @@ class EnvApiClient extends EventEmitter {
             );
             return this.callv1Api(this.defaultBranch, service, params.cluster)
               .then(result => {
-                tags.kitserver_envapi_version = "v2";
-                this.emit("metric", {
-                  kind: "increment",
-                  name: "envapi.call",
-                  tags: tags
-                });
+                if (_self.options.events) {
+                  tags.kitserver_envapi_version = "v2";
+                  _self.options.events.emitMetric({
+                    kind: "increment",
+                    name: "envapi.call",
+                    tags: tags
+                  });
+                }
                 return result;
               })
               .catch(err => {
@@ -202,13 +206,14 @@ class EnvApiClient extends EventEmitter {
         }
       }
 
-      _self.emit("metric", {
-        kind: "event",
-        title: "Failure getting envs through envapi",
-        text: `Error getting envs with envapi: ${errMsg}`,
-        tags: tags
-      });
-
+      if (_self.options.events) {
+        _self.options.events.emitMetric({
+          kind: "event",
+          title: "Failure getting envs through envapi",
+          text: `Error getting envs with envapi: ${errMsg}`,
+          tags: tags
+        });
+      }
       throw new Error(errMsg);
     });
   }

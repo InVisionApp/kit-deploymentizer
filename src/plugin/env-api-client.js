@@ -8,7 +8,7 @@ const EventEmitter = require("events");
 /**
  * Class for accessing the EnvApi Service.
  */
-class EnvApiClient extends EventEmitter {
+class EnvApiClient {
   /**
 	 * Requires the apiUrl and apiToken to be set included as parameters.
 	 * @param  {[type]} options
@@ -29,6 +29,7 @@ class EnvApiClient extends EventEmitter {
     this.timeout = options.timeout || 15000;
     this.k8sBranch = options.k8sBranch === true || false;
     this.request = rp;
+    this.events = options.events || undefined;
   }
 
   /**
@@ -117,11 +118,13 @@ class EnvApiClient extends EventEmitter {
       }
       result = this.convertEnvResult(config, result);
 
-      self.emit("metric", {
-        kind: "increment",
-        name: "envapi.call",
-        tags: tags
-      });
+      if (self.options.events) {
+        self.options.events.emitMetric({
+          kind: "increment",
+          name: "envapi.call",
+          tags: tags
+        });
+      }
 
       return result;
     }).bind(this)().catch(function(err) {
@@ -129,20 +132,23 @@ class EnvApiClient extends EventEmitter {
       // API call failed...
       logger.fatal(`Unable to fetch or convert ENV Config ${errStr}`);
 
-      let tags = {
-        app: "kit_deploymentizer",
-        envapi_version: "v2",
-        envapi_resource: service.annotations[EnvApiClient.annotationServiceName]
-      };
-      if (typeof cluster !== "string") {
-        tags.envapi_cluster = cluster.name();
+      if (self.options.events) {
+        let tags = {
+          app: "kit_deploymentizer",
+          envapi_version: "v2",
+          envapi_resource:
+            service.annotations[EnvApiClient.annotationServiceName]
+        };
+        if (typeof cluster !== "string") {
+          tags.envapi_cluster = cluster.name();
+        }
+        self.options.events.emitMetric({
+          kind: "event",
+          title: "Failure getting envs through envapi",
+          text: `Error getting envs with envapi: ${errStr}`,
+          tags: tags
+        });
       }
-      self.emit("metric", {
-        kind: "event",
-        title: "Failure getting envs through envapi",
-        text: `Error getting envs with envapi: ${errStr}`,
-        tags: tags
-      });
       throw err;
     });
   }

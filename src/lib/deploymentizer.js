@@ -108,9 +108,11 @@ class Deploymentizer {
 
       let configPlugin = undefined;
       if (this.options.configPlugin) {
+        let pluginOpts = this.options.configPlugin.options;
+        pluginOpts.events = this.options.events;
         configPlugin = new PluginHandler(
           this.options.configPlugin.path,
-          this.options.configPlugin.options
+          pluginOpts
         );
       }
       // Load the /cluster 'cluster.yaml' and 'configuration-var.yaml'
