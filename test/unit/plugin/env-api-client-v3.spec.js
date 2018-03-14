@@ -7,11 +7,16 @@ const ClusterDefinition = require("../../../src/lib/cluster-definition");
 const ApiConfig = require("../../../src/plugin/env-api-client-v3");
 
 describe("ENV API Client Configuration plugin", () => {
+  let ApiConfig;
+
+  before(() => {
+    ApiConfig = require("../../../src/plugin/env-api-client-v3");
+  });
+
   describe("Load Client", () => {
     it("should fail with validation error", done => {
       try {
         const options = { api: "http://somehost/v3" };
-        const ApiConfig = require("../../../src/plugin/env-api-client-v2");
         const apiConfig = new ApiConfig(options);
         done(new Error("Should have failed"));
       } catch (err) {
