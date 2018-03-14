@@ -292,6 +292,16 @@ class Generator {
       return;
     }
 
+    this.eventHandler.emitMetric({
+      kind: "event",
+      title: "No SHA for image tag",
+      text: `resource ${artifact.name} has not got sha for image tag`,
+      tags: {
+        app: "kit_deploymentizer",
+        kit_resource: artifact.name
+      }
+    });
+
     // Otherwise use image_tag if present
     if (!artifact.image_tag) {
       this.eventHandler.emitWarn(`No image tag found for ${artifact.name}`);
