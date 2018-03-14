@@ -4,13 +4,11 @@ var expect = require("chai").expect;
 const Promise = require("bluebird");
 const sinon = require("sinon");
 const ClusterDefinition = require("../../../src/lib/cluster-definition");
-const EventEmitter = require("events").EventEmitter;
 
 describe("ENV API Client Configuration plugin", () => {
-  let emitter, ApiConfig;
+  let ApiConfig;
   before(() => {
     process.env.ENVAPI_ACCESS_TOKEN = "sometoken";
-    emitter = new EventEmitter();
     ApiConfig = require("../../../src/plugin/env-api-client");
   });
 
@@ -65,10 +63,6 @@ describe("ENV API Client Configuration plugin", () => {
       Promise.coroutine(function*() {
         const options = { apiUrl: "http://somehost/v1", Token: "SOME-TOKEN" };
         const apiConfig = new ApiConfig(options);
-        apiConfig.emit = (name, obj) => {
-          expect(name).to.be.equal("metric");
-          expect(typeof obj).to.be.equal("object");
-        };
         const service = {
           name: "mongo-init",
           annotations: {

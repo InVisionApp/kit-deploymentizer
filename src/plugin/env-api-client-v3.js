@@ -13,7 +13,6 @@ class EnvApiClient {
 	 * @param  {[type]} options
 	 */
   constructor(options) {
-    super();
     this.apiToken = process.env.ENVAPI_ACCESS_TOKEN;
     if (!this.apiToken) {
       throw new Error(
@@ -135,8 +134,8 @@ class EnvApiClient {
           if (res.status && res.status === "success") {
             let result = {};
             result = this.convertEnvResult(res.values, result);
-            if (_self.options.events) {
-              _self.options.events.emitMetric({
+            if (_self.events) {
+              _self.events.emitMetric({
                 kind: "increment",
                 name: "envapi.call",
                 tags: tags
@@ -157,9 +156,9 @@ class EnvApiClient {
             );
             return this.callv1Api(this.defaultBranch, service, params.cluster)
               .then(result => {
-                if (_self.options.events) {
+                if (_self.events) {
                   tags.kitserver_envapi_version = "v2";
-                  _self.options.events.emitMetric({
+                  _self.events.emitMetric({
                     kind: "increment",
                     name: "envapi.call",
                     tags: tags
@@ -206,8 +205,8 @@ class EnvApiClient {
         }
       }
 
-      if (_self.options.events) {
-        _self.options.events.emitMetric({
+      if (_self.events) {
+        _self.events.emitMetric({
           kind: "event",
           title: "Failure getting envs through envapi",
           text: `Error getting envs with envapi: ${errMsg}`,

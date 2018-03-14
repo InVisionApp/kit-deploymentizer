@@ -14,7 +14,6 @@ class EnvApiClient {
 	 * @param  {[type]} options
 	 */
   constructor(options) {
-    super();
     this.apiToken = process.env.ENVAPI_ACCESS_TOKEN;
     if (!this.apiToken) {
       throw new Error(
@@ -118,8 +117,8 @@ class EnvApiClient {
       }
       result = this.convertEnvResult(config, result);
 
-      if (self.options.events) {
-        self.options.events.emitMetric({
+      if (self.events) {
+        self.events.emitMetric({
           kind: "increment",
           name: "envapi.call",
           tags: tags
@@ -132,7 +131,7 @@ class EnvApiClient {
       // API call failed...
       logger.fatal(`Unable to fetch or convert ENV Config ${errStr}`);
 
-      if (self.options.events) {
+      if (self.events) {
         let tags = {
           app: "kit_deploymentizer",
           envapi_version: "v2",
@@ -142,7 +141,7 @@ class EnvApiClient {
         if (typeof cluster !== "string") {
           tags.envapi_cluster = cluster.name();
         }
-        self.options.events.emitMetric({
+        self.events.emitMetric({
           kind: "event",
           title: "Failure getting envs through envapi",
           text: `Error getting envs with envapi: ${errStr}`,

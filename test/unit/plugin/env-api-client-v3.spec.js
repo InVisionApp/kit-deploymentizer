@@ -5,13 +5,11 @@ const Promise = require("bluebird");
 const sinon = require("sinon");
 const ClusterDefinition = require("../../../src/lib/cluster-definition");
 const ApiConfig = require("../../../src/plugin/env-api-client-v3");
-const EventEmitter = require("events").EventEmitter;
 
 describe("ENV API Client Configuration plugin", () => {
-  let emitter, ApiConfig;
+  let ApiConfig;
 
   before(() => {
-    emitter = new EventEmitter();
     ApiConfig = require("../../../src/plugin/env-api-client-v3");
   });
 
