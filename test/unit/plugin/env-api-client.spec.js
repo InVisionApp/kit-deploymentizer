@@ -6,8 +6,10 @@ const sinon = require("sinon");
 const ClusterDefinition = require("../../../src/lib/cluster-definition");
 
 describe("ENV API Client Configuration plugin", () => {
+  let ApiConfig;
   before(() => {
     process.env.ENVAPI_ACCESS_TOKEN = "sometoken";
+    ApiConfig = require("../../../src/plugin/env-api-client");
   });
 
   after(() => {
@@ -17,7 +19,6 @@ describe("ENV API Client Configuration plugin", () => {
   describe("Load Client", () => {
     it("should fail with validation error", done => {
       try {
-        const ApiConfig = require("../../../src/plugin/env-api-client");
         const apiConfig = new ApiConfig();
         done(new Error("Should have failed"));
       } catch (err) {
@@ -28,7 +29,6 @@ describe("ENV API Client Configuration plugin", () => {
     it("should fail with validation error", done => {
       try {
         const options = { api: "http://somehost/v1", Token: "SOME-TOKEN" };
-        const ApiConfig = require("../../../src/plugin/env-api-client");
         const apiConfig = new ApiConfig(options);
         done(new Error("Should have failed"));
       } catch (err) {
@@ -42,7 +42,6 @@ describe("ENV API Client Configuration plugin", () => {
         apiToken: "SOME-TOKEN",
         timeout: 20000
       };
-      const ApiConfig = require("../../../src/plugin/env-api-client");
       const apiConfig = new ApiConfig(options);
       expect(apiConfig).to.exist;
       expect(apiConfig.apiToken).to.equal("SOME-TOKEN");
@@ -52,7 +51,6 @@ describe("ENV API Client Configuration plugin", () => {
     });
     it("should load plugin successfully and default timeout", done => {
       const options = { apiUrl: "http://somehost/v1", apiToken: "SOME-TOKEN" };
-      const ApiConfig = require("../../../src/plugin/env-api-client");
       const apiConfig = new ApiConfig(options);
       expect(apiConfig).to.exist;
       expect(apiConfig.timeout).to.equal(15000);
@@ -64,7 +62,6 @@ describe("ENV API Client Configuration plugin", () => {
     it("should fail with error", done => {
       Promise.coroutine(function*() {
         const options = { apiUrl: "http://somehost/v1", Token: "SOME-TOKEN" };
-        const ApiConfig = require("../../../src/plugin/env-api-client");
         const apiConfig = new ApiConfig(options);
         const service = {
           name: "mongo-init",
@@ -123,7 +120,6 @@ describe("ENV API Client Configuration plugin", () => {
           apiToken: "SOME-TOKEN",
           k8sBranch: true
         };
-        const ApiConfig = require("../../../src/plugin/env-api-client");
         const apiConfig = new ApiConfig(options);
         apiConfig.request = rp;
 
@@ -193,7 +189,6 @@ describe("ENV API Client Configuration plugin", () => {
           apiToken: "SOME-TOKEN",
           k8sBranch: true
         };
-        const ApiConfig = require("../../../src/plugin/env-api-client");
         const apiConfig = new ApiConfig(options);
         apiConfig.request = rp;
 
@@ -264,7 +259,6 @@ describe("ENV API Client Configuration plugin", () => {
           apiUrl: "http://somehost/v1",
           apiToken: "SOME-TOKEN"
         };
-        const ApiConfig = require("../../../src/plugin/env-api-client");
         const apiConfig = new ApiConfig(options);
         apiConfig.request = rp;
 

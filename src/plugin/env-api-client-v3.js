@@ -37,6 +37,7 @@ class EnvApiClient {
     ) {
       this.supportFallback = true;
     }
+    this.events = options.events || undefined;
   }
 
   /**
@@ -119,14 +120,31 @@ class EnvApiClient {
         cluster: cluster.name(),
         metadata: metadata
       };
+
+      let tags = {
+        app: "kit_deploymentizer",
+        envapi_environment: params.environment,
+        envapi_cluster: params.cluster,
+        envapi_service: params.service,
+        envapi_version: "v3"
+      };
+
       return this.callv3Api(params)
         .then(res => {
           if (res.status && res.status === "success") {
             let result = {};
             result = this.convertEnvResult(res.values, result);
+            if (_self.events) {
+              _self.events.emitMetric({
+                kind: "increment",
+                name: "envapi.call",
+                tags: tags
+              });
+            }
             return result;
           } else {
-            throw new Error(res.message || "No error message supplied");
+            const errStr = res.message || "No error message supplied";
+            throw new Error(errStr);
           }
         })
         .catch(err => {
@@ -138,6 +156,14 @@ class EnvApiClient {
             );
             return this.callv1Api(this.defaultBranch, service, params.cluster)
               .then(result => {
+                if (_self.events) {
+                  tags.kitserver_envapi_version = "v2";
+                  _self.events.emitMetric({
+                    kind: "increment",
+                    name: "envapi.call",
+                    tags: tags
+                  });
+                }
                 return result;
               })
               .catch(err => {
@@ -161,6 +187,31 @@ class EnvApiClient {
         err.response.body.status === "error"
       ) {
         errMsg = _self.convertErrorResponse(err.response.body);
+      }
+
+      let tags = {
+        app: "kit_deploymentizer",
+        envapi_resource:
+          service.annotations[EnvApiClient.annotationServiceName],
+        envapi_version: "v3_v2"
+      };
+
+      if (typeof cluster === "object") {
+        if (cluster.metadata && typeof cluster.metadata === "function") {
+          tags.envapi_environment = cluster.metadata().environment;
+        }
+        if (cluster.name && typeof cluster.name === "function") {
+          tags.envapi_cluster = cluster.name();
+        }
+      }
+
+      if (_self.events) {
+        _self.events.emitMetric({
+          kind: "event",
+          title: "Failure getting envs through envapi",
+          text: `Error getting envs with envapi: ${errMsg}`,
+          tags: tags
+        });
       }
       throw new Error(errMsg);
     });
