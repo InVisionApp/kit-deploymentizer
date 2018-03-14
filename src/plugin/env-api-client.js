@@ -139,7 +139,7 @@ class EnvApiClient extends EventEmitter {
       }
       self.emit("metric", {
         kind: "event",
-        name: "envapi.error",
+        title: "Failure getting envs through envapi",
         text: `Error getting envs with envapi: ${errStr}`,
         tags: tags
       });
