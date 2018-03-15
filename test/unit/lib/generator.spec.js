@@ -93,6 +93,43 @@ describe("Generator", () => {
       }
     };
 
+    it("should send event to DD without SHA", () => {
+      let events = new EventHandler();
+      events.on("metric", function(msg) {
+        expect(msg).to.deep.equal({
+          kind: "event",
+          title: "No SHA for image tag",
+          text: "resource auth has not got sha for image tag",
+          tags: { app: "kit_deploymentizer", kit_resource: "auth" }
+        });
+      });
+
+      return YamlHandler.loadClusterDefinitions(
+        "./test/fixture/clusters"
+      ).should.be.fulfilled.then(clusterDefs => {
+        const clusterDef = clusterDefs[3];
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          configStub,
+          undefined,
+          events
+        );
+        // we add the image tag here, since we dont preload the base cluster def in this test
+        clusterDef.resources().auth.containers["auth-con"].image_tag =
+          "node-auth";
+
+        return generator._createLocalConfiguration(
+          clusterDef.configuration(),
+          "auth",
+          clusterDef.resources().auth
+        );
+      });
+    });
+
     it("should create copy of config, merging in values from resource", () => {
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
