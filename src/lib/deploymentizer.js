@@ -109,7 +109,7 @@ class Deploymentizer {
       let configPlugin = undefined;
       if (this.options.configPlugin) {
         let pluginOpts = this.options.configPlugin.options;
-        pluginOpts.events = this.options.events;
+        pluginOpts.events = this.events;
         configPlugin = new PluginHandler(
           this.options.configPlugin.path,
           pluginOpts

@@ -125,7 +125,7 @@ class EnvApiClient {
         app: "kit_deploymentizer",
         envapi_environment: params.environment,
         envapi_cluster: params.cluster,
-        envapi_service: params.service,
+        envapi_resource: params.service,
         envapi_version: "v3"
       };
 
