@@ -233,7 +233,7 @@ describe("Generator", () => {
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
       ).should.be.fulfilled.then(clusterDefs => {
-        const sha = "SHA-comitId";
+        const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
         const clusterDef = clusterDefs[3];
         const generator = new Generator(
           clusterDef,
@@ -259,7 +259,9 @@ describe("Generator", () => {
           .should.be.fulfilled.then(localConfig => {
             expect(localConfig).to.exist;
             expect(localConfig.svc).to.exist;
-            expect(localConfig["auth-con"].image).to.equal(sha);
+            expect(localConfig["auth-con"].image).to.equal(
+              `quay.io/invision/auth:release-${sha}`
+            );
           });
       });
     });

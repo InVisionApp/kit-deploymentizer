@@ -288,7 +288,8 @@ class Generator {
 
     // Use the commitId when passed in
     if (this.options.commitId) {
-      artifact.image = this.options.commitId;
+      artifact.image = `quay.io/invision/${artifact.name}:release-${this.options
+        .commitId}`;
       return;
     }
 
