@@ -254,13 +254,26 @@ class Generator {
         //	 (this defines the name of the directory containing images based on branch),
         //	 if not defined skip
         if (!localConfig[containerName].image) {
-          if (this.options.commitId) {
-            localConfig[
-              containerName
-            ].image = `quay.io/invision/${artifact.name}:release-${this.options
-              .commitId}`;
-          } else {
-            if (artifact.image_tag) {
+          if (artifact.image_tag) {
+            if (this.options.commitId) {
+              localConfig[
+                containerName
+              ].image = `quay.io/${artifact.image_tag}:release-${this.options
+                .commitId}`;
+            } else {
+              this.eventHandler.emitWarn(
+                `No SHA passed in for ${artifact.name}`
+              );
+              this.eventHandler.emitMetric({
+                kind: "event",
+                title: "No SHA passed in",
+                text: `No SHA passsed in for resource ${artifact.name}`,
+                tags: {
+                  app: "kit_deploymentizer",
+                  kit_resource: artifact.name
+                }
+              });
+
               const artifactBranch =
                 localConfig[containerName].branch || localConfig.branch;
               if (
@@ -279,20 +292,20 @@ class Generator {
               localConfig[containerName].image = this.options.imageResourceDefs[
                 artifact.image_tag
               ][artifactBranch].image;
-            } else {
-              this.eventHandler.emitWarn(
-                `No image tag found for ${artifact.name}`
-              );
-              this.eventHandler.emitMetric({
-                kind: "event",
-                title: "No image tag found nor SHA passed in",
-                text: `No image tag found nor SHA passed in for resource ${artifact.name}`,
-                tags: {
-                  app: "kit_deploymentizer",
-                  kit_resource: artifact.name
-                }
-              });
             }
+          } else {
+            this.eventHandler.emitWarn(
+              `No image tag found for ${artifact.name}`
+            );
+            this.eventHandler.emitMetric({
+              kind: "event",
+              title: "No image tag found",
+              text: `No image tag found for resource ${artifact.name}`,
+              tags: {
+                app: "kit_deploymentizer",
+                kit_resource: artifact.name
+              }
+            });
           }
           // already image tag
         } else {
