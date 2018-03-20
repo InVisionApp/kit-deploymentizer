@@ -223,11 +223,9 @@ class Generator {
         // clone this so we dont affect the definition
         let artifact = _.cloneDeep(containers[i].container);
         let containerName = containers[i].name;
-
         // make sure the name is set
-        // TODO: Why is not artifact.name == containerName ??
         artifact.name = artifact.name || resourceName;
-
+        localConfig[containerName] = artifact;
         // If we have a plugin use it to load env and other config values
         if (this.configPlugin) {
           // get Configuration from plugin
@@ -235,25 +233,74 @@ class Generator {
             artifact,
             this.options.clusterDef
           );
-
           // merge these in --> At this point, envConfig will overwrite anything in the cluster def.
-          artifact = resourceHandler.merge(artifact, envConfig);
+          localConfig[containerName] = resourceHandler.merge(
+            artifact,
+            envConfig
+          );
         }
 
         // Check to see if the specific resource has its own envs and merge if needed.
         if (artifact.env) {
           // Process any external ENV values before merging.
-          artifact.env = resourceHandler.mergeEnvs(
-            artifact.env,
+          const env = resourceHandler.mergeEnvs(
+            localConfig[containerName].env,
             resourceHandler.loadExternalEnv(artifact.env)
           );
+          localConfig[containerName].env = env;
         }
 
-        // Set Image tag in the container
-        this.setImageFor(artifact, localConfig.branch);
-
-        // point at the end the container with its artifact
-        localConfig[containerName] = artifact;
+        // If an image is not predefined, try to find the image tag
+        //	 (this defines the name of the directory containing images based on branch),
+        //	 if not defined skip
+        if (!localConfig[containerName].image) {
+          if (this.options.commitId) {
+            localConfig[
+              containerName
+            ].image = `quay.io/invision/${artifact.name}:release-${this.options
+              .commitId}`;
+          } else {
+            if (artifact.image_tag) {
+              const artifactBranch =
+                localConfig[containerName].branch || localConfig.branch;
+              if (
+                !this.options.imageResourceDefs[artifact.image_tag] ||
+                !this.options.imageResourceDefs[artifact.image_tag][
+                  artifactBranch
+                ]
+              ) {
+                this.eventHandler.emitWarn(
+                  JSON.stringify(this.options.imageResourceDefs)
+                );
+                throw new Error(
+                  `Image ${artifact.image_tag} not found for defined branch (${artifactBranch})`
+                );
+              }
+              localConfig[containerName].image = this.options.imageResourceDefs[
+                artifact.image_tag
+              ][artifactBranch].image;
+            } else {
+              this.eventHandler.emitWarn(
+                `No image tag found for ${artifact.name}`
+              );
+              this.eventHandler.emitMetric({
+                kind: "event",
+                title: "No image tag found nor SHA passed in",
+                text: `No image tag found nor SHA passed in for resource ${artifact.name}`,
+                tags: {
+                  app: "kit_deploymentizer",
+                  kit_resource: artifact.name
+                }
+              });
+            }
+          }
+          // already image tag
+        } else {
+          this.eventHandler.emitWarn(
+            `Image ${localConfig[containerName]
+              .image} already defined for ${artifact.name}`
+          );
+        }
       }
 
       // make sure that at least one of the generated container images matches the commit SHA that spawned this
@@ -269,61 +316,6 @@ class Generator {
       }
       return localConfig;
     }).bind(this)();
-  }
-
-  /**
-   * Sets the image tag , taking priority the SHA passed in
-   * @param	{[type]} artifact	  	 The clone of the container
-   * @param	{[type]} localBranch	 Local branch
-   * @return will throw an error if it's not valid tag for branch
-   */
-  setImageFor(artifact, localBranch) {
-    // skip if is already settled
-    if (artifact.image) {
-      this.eventHandler.emitWarn(
-        `Image ${artifact.image} already defined for ${artifact.name}`
-      );
-      return;
-    }
-
-    // Use the commitId when passed in
-    if (this.options.commitId) {
-      artifact.image = `quay.io/invision/${artifact.name}:release-${this.options
-        .commitId}`;
-      return;
-    }
-
-    this.eventHandler.emitMetric({
-      kind: "event",
-      title: "No SHA for image tag",
-      text: `resource ${artifact.name} has not got sha for image tag`,
-      tags: {
-        app: "kit_deploymentizer",
-        kit_resource: artifact.name
-      }
-    });
-
-    // Otherwise use image_tag if present
-    if (!artifact.image_tag) {
-      this.eventHandler.emitWarn(`No image tag found for ${artifact.name}`);
-      return;
-    }
-
-    const artifactBranch = artifact.branch || localBranch;
-    if (
-      !this.options.imageResourceDefs[artifact.image_tag] ||
-      !this.options.imageResourceDefs[artifact.image_tag][artifactBranch]
-    ) {
-      this.eventHandler.emitWarn(
-        JSON.stringify(this.options.imageResourceDefs)
-      );
-      throw new Error(
-        `Image ${artifact.image_tag} not found for defined branch (${artifactBranch})`
-      );
-    }
-    artifact.image = this.options.imageResourceDefs[artifact.image_tag][
-      artifactBranch
-    ].image;
   }
 
   /**
