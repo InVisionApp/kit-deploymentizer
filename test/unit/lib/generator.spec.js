@@ -98,8 +98,8 @@ describe("Generator", () => {
       events.on("metric", function(msg) {
         expect(msg).to.deep.equal({
           kind: "event",
-          title: "No SHA for image tag",
-          text: "resource auth has not got sha for image tag",
+          title: "No SHA passed in",
+          text: "No SHA passsed in for resource auth",
           tags: { app: "kit_deploymentizer", kit_resource: "auth" }
         });
       });
@@ -235,6 +235,8 @@ describe("Generator", () => {
       ).should.be.fulfilled.then(clusterDefs => {
         const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
         const clusterDef = clusterDefs[3];
+        let auth = clusterDef.cluster.resources["auth"];
+        auth.containers["auth-con"].image_tag = "invision/auth";
         const generator = new Generator(
           clusterDef,
           imageResources,
