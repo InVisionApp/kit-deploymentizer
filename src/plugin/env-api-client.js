@@ -3,6 +3,7 @@
 const Promise = require("bluebird");
 const rp = require("request-promise");
 const logger = require("log4js").getLogger();
+const EventEmitter = require("events");
 
 /**
  * Class for accessing the EnvApi Service.

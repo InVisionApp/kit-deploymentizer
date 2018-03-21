@@ -101,7 +101,7 @@ class Deploymentizer {
         this.paths.type
       );
 
-      // Load image tag (usage based on Resource Spec or cluster spec)
+      // Load image tag (usage based on Resource Spec or cluster spec
       const imageResources = yield yamlHandler.loadImageDefinitions(
         this.paths.images
       );
