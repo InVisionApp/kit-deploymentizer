@@ -1,16 +1,10 @@
 "use strict";
 
+var expect = require("chai").expect;
 const Promise = require("bluebird");
 const sinon = require("sinon");
 const ClusterDefinition = require("../../../src/lib/cluster-definition");
 const ApiConfig = require("../../../src/plugin/env-api-client-v3");
-const EventHandler = require("../../../src/util/event-handler");
-
-const chai = require("chai");
-const chaiAsPromised = require("chai-as-promised");
-chai.use(chaiAsPromised);
-chai.should();
-const expect = chai.expect;
 
 describe("ENV API Client Configuration plugin", () => {
   let ApiConfig;
@@ -131,45 +125,6 @@ describe("ENV API Client Configuration plugin", () => {
         expect(err.message).to.have.string("Invalid argument for 'cluster'");
         done();
       });
-    });
-
-    it("should send metrics via events", () => {
-      const events = new EventHandler();
-      let sentMetric = false;
-      events.on("metric", function(msg) {
-        sentMetric = true;
-      });
-      const cluster = {
-        kind: "ClusterNamespace",
-        metadata: {
-          name: "staging-cluster",
-          type: "staging",
-          environment: "staging",
-          domain: "somewbesite.com",
-          restricted: true
-        }
-      };
-      const config = {
-        kind: "ResourceConfig",
-        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
-      };
-      const clusterDef = new ClusterDefinition(cluster, config);
-
-      const options = {
-        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
-        events: events
-      };
-
-      var rp = sinon.stub();
-      rp.onFirstCall().returns(resV3Valid);
-      const apiConfig = new ApiConfig(options);
-      apiConfig.request = rp;
-
-      return apiConfig
-        .fetch(testService, clusterDef)
-        .should.be.fulfilled.then(() => {
-          expect(sentMetric).to.equal(true);
-        });
     });
 
     it("should call request to v3 and succeed", done => {

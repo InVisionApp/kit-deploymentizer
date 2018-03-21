@@ -38,17 +38,17 @@ function fileInfo(file) {
 class Generator {
   /**
 	 * Configuration options for Generator
-	 * @param	{[type]} clusterDef				 Cluster Definition for a given cluster
+	 * @param	{[type]} clusterDef				Cluster Definition for a given cluster
 	 * @param	{[type]} imageResourceDefs All Image Resources
-	 * @param	{[type]} basePath					 Base Path to load Resources from
-	 * @param	{[type]} exportPath				 Where to save files
-	 * @param	{[type]} save							 Save or not
-	 * @param	{[type]} configPlugin			 Plugin to use for loading configuration information
-	 * @param	{[type]} resource 				 Resource to process
-	 * @param	{[type]} eventHandler 		 To log events to
-	 * @param	{[type]} deployId					 DeployId to use when generating manifests, switch to uuid from elroy
-	 * @param	{[type]} fastRollback			 Determines if fastRollback support is enabled. used by manifest generation
-	 * @param	{[type]} commitId   			 (optional) The SHA of the commit that originated this generation request
+	 * @param	{[type]} basePath					Base Path to load Resources from
+	 * @param	{[type]} exportPath				Where to save files
+	 * @param	{[type]} save							Save or not
+	 * @param	{[type]} configPlugin			Plugin to use for loading configuration information
+	 * @param	{[type]} resource 				resource to process
+	 * @param	{[type]} eventHandler 		to log events to
+	 * @param	{[type]} deployId								deployId to use when generating manifests, switch to uuid from elroy
+	 * @param	{[type]} fastRollback			determines if fastRollback support is enabled. used by manifest generation
+	 * @param	{[type]} commitId   			(optional) The SHA of the commit that originated this generation request
 	 */
   constructor(
     clusterDef,
@@ -255,59 +255,29 @@ class Generator {
         //	 if not defined skip
         if (!localConfig[containerName].image) {
           if (artifact.image_tag) {
-            if (this.options.commitId) {
-              localConfig[
-                containerName
-              ].image = `quay.io/${artifact.image_tag}:release-${this.options
-                .commitId}`;
-            } else {
+            const artifactBranch =
+              localConfig[containerName].branch || localConfig.branch;
+            if (
+              !this.options.imageResourceDefs[artifact.image_tag] ||
+              !this.options.imageResourceDefs[artifact.image_tag][
+                artifactBranch
+              ]
+            ) {
               this.eventHandler.emitWarn(
-                `No SHA passed in for ${artifact.name}`
+                JSON.stringify(this.options.imageResourceDefs)
               );
-              this.eventHandler.emitMetric({
-                kind: "event",
-                title: "No SHA passed in",
-                text: `No SHA passsed in for resource ${artifact.name}`,
-                tags: {
-                  app: "kit_deploymentizer",
-                  kit_resource: artifact.name
-                }
-              });
-
-              const artifactBranch =
-                localConfig[containerName].branch || localConfig.branch;
-              if (
-                !this.options.imageResourceDefs[artifact.image_tag] ||
-                !this.options.imageResourceDefs[artifact.image_tag][
-                  artifactBranch
-                ]
-              ) {
-                this.eventHandler.emitWarn(
-                  JSON.stringify(this.options.imageResourceDefs)
-                );
-                throw new Error(
-                  `Image ${artifact.image_tag} not found for defined branch (${artifactBranch})`
-                );
-              }
-              localConfig[containerName].image = this.options.imageResourceDefs[
-                artifact.image_tag
-              ][artifactBranch].image;
+              throw new Error(
+                `Image ${artifact.image_tag} not found for defined branch (${artifactBranch})`
+              );
             }
+            localConfig[containerName].image = this.options.imageResourceDefs[
+              artifact.image_tag
+            ][artifactBranch].image;
           } else {
             this.eventHandler.emitWarn(
               `No image tag found for ${artifact.name}`
             );
-            this.eventHandler.emitMetric({
-              kind: "event",
-              title: "No image tag found",
-              text: `No image tag found for resource ${artifact.name}`,
-              tags: {
-                app: "kit_deploymentizer",
-                kit_resource: artifact.name
-              }
-            });
           }
-          // already image tag
         } else {
           this.eventHandler.emitWarn(
             `Image ${localConfig[containerName]
