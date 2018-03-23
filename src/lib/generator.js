@@ -5,6 +5,7 @@ const path = require("path");
 const Promise = require("bluebird");
 const yamlHandler = require("../util/yaml-handler");
 const resourceHandler = require("../util/resource-handler");
+const FeatureFlag = require("./feauture-flag");
 const fse = require("fs-extra");
 const fseCopy = Promise.promisify(fse.copy);
 const fseMkdirs = Promise.promisify(fse.mkdirs);
@@ -76,6 +77,7 @@ class Generator {
     };
     this.configPlugin = configPlugin;
     this.eventHandler = eventHandler;
+    this.flag = new FeatureFlag();
   }
 
   /**
@@ -255,7 +257,7 @@ class Generator {
         //	 if not defined skip
         if (!localConfig[containerName].image) {
           if (artifact.image_tag) {
-            if (this.options.commitId) {
+            if (this.flag.isEnabled("shaImage") && this.options.commitId) {
               if (
                 this.isMatchingPrimaryImg(
                   containers.length,
@@ -269,19 +271,20 @@ class Generator {
                   .commitId}`;
               }
             } else {
-              this.eventHandler.emitWarn(
-                `No SHA passed in for ${artifact.name}`
-              );
-              this.eventHandler.emitMetric({
-                kind: "event",
-                title: "No SHA passed in",
-                text: `No SHA passsed in for resource ${artifact.name}`,
-                tags: {
-                  app: "kit_deploymentizer",
-                  kit_resource: artifact.name
-                }
-              });
-
+              if (this.flag.isEnabled("shaImage")) {
+                this.eventHandler.emitWarn(
+                  `No SHA passed in for ${artifact.name}`
+                );
+                this.eventHandler.emitMetric({
+                  kind: "event",
+                  title: "No SHA passed in",
+                  text: `No SHA passsed in for resource ${artifact.name}`,
+                  tags: {
+                    app: "kit_deploymentizer",
+                    kit_resource: artifact.name
+                  }
+                });
+              }
               const artifactBranch =
                 localConfig[containerName].branch || localConfig.branch;
               if (

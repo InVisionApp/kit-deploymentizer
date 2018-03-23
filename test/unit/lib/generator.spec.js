@@ -93,6 +93,10 @@ describe("Generator", () => {
       }
     };
 
+    afterEach(() => {
+      delete process.env["FEATURES_ENABLED"];
+    });
+
     it("should send event to DD without SHA", () => {
       let events = new EventHandler();
       events.on("metric", function(msg) {
@@ -103,6 +107,7 @@ describe("Generator", () => {
           tags: { app: "kit_deploymentizer", kit_resource: "auth" }
         });
       });
+      process.env["FEATURES_ENABLED"] = "shaImage";
 
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
@@ -230,6 +235,8 @@ describe("Generator", () => {
     });
 
     it("should set the image as commitId when is passed in for one container", () => {
+      process.env["FEATURES_ENABLED"] = "shaImage";
+
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
       ).should.be.fulfilled.then(clusterDefs => {
@@ -269,6 +276,8 @@ describe("Generator", () => {
     });
 
     it("should throw an error when no primary set for service with 2 containers and commitId is passed in", () => {
+      process.env["FEATURES_ENABLED"] = "shaImage";
+
       const serviceName = "auth-two-containers";
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
@@ -307,6 +316,8 @@ describe("Generator", () => {
     });
 
     it("should set the image when primary set for service with 2 containers and commitId is passed in", () => {
+      process.env["FEATURES_ENABLED"] = "shaImage";
+
       const serviceName = "auth-two-containers";
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
