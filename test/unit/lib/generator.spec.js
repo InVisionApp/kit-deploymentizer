@@ -229,7 +229,7 @@ describe("Generator", () => {
       });
     });
 
-    it("should set the image as commitId when is passed in", () => {
+    it("should set the image as commitId when is passed in for one container", () => {
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
       ).should.be.fulfilled.then(clusterDefs => {
@@ -263,6 +263,92 @@ describe("Generator", () => {
             expect(localConfig.svc).to.exist;
             expect(localConfig["auth-con"].image).to.equal(
               `quay.io/invision/auth:release-${sha}`
+            );
+          });
+      });
+    });
+
+    it("should throw an error when no primary set for service with 2 containers and commitId is passed in", () => {
+      const serviceName = "auth-two-containers";
+      return YamlHandler.loadClusterDefinitions(
+        "./test/fixture/clusters"
+      ).should.be.fulfilled.then(clusterDefs => {
+        const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
+        const clusterDef = clusterDefs[3];
+        const resource = clusterDef.cluster.resources[serviceName];
+        resource.containers[serviceName + "-con"].image_tag =
+          "invision/" + serviceName;
+
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          undefined,
+          undefined,
+          new EventHandler(),
+          undefined,
+          undefined,
+          sha
+        );
+        expect(clusterDef).to.exist;
+
+        return generator
+          ._createLocalConfiguration(
+            clusterDef.configuration(),
+            serviceName,
+            resource
+          )
+          .should.be.rejectedWith(
+            "No primary set for the resource auth-two-containers with containers > 1"
+          );
+      });
+    });
+
+    it("should set the image when primary set for service with 2 containers and commitId is passed in", () => {
+      const serviceName = "auth-two-containers";
+      return YamlHandler.loadClusterDefinitions(
+        "./test/fixture/clusters"
+      ).should.be.fulfilled.then(clusterDefs => {
+        const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
+        const clusterDef = clusterDefs[3];
+        const resource = clusterDef.cluster.resources[serviceName];
+        let primaryContainer = resource.containers[serviceName + "-con"];
+        primaryContainer.image_tag = "invision/" + serviceName;
+        primaryContainer.primary = true;
+
+        let secondaryContainer =
+          resource.containers[serviceName + "-datadog-con"];
+        secondaryContainer.image_tag = "invision/" + serviceName + "-datadog";
+        secondaryContainer.primary = false;
+
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          undefined,
+          undefined,
+          new EventHandler(),
+          undefined,
+          undefined,
+          sha
+        );
+        expect(clusterDef).to.exist;
+
+        return generator
+          ._createLocalConfiguration(
+            clusterDef.configuration(),
+            serviceName,
+            resource
+          )
+          .should.be.fulfilled.then(localConfig => {
+            expect(localConfig).to.exist;
+            expect(localConfig.svc).to.exist;
+            expect(localConfig[serviceName + "-con"].image).to.equal(
+              `quay.io/invision/auth-two-containers:release-${sha}`
             );
           });
       });

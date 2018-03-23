@@ -1,0 +1,68 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: auth-two-containers-deployment
+  annotations:
+    kit-deployer/dependency-selector: 'tier=backend'
+  labels:
+    app: invisionapp
+    tier: frontend
+    tech: nodejs
+    release: stable
+    {{#deployment.id}}
+    id: {{{deployment.id}}}
+    {{/deployment.id}}
+    service: {{{name}}}
+spec:
+  template:
+    spec:
+      containers:
+        - name: auth-two-containers-con
+          imagePullPolicy: {{{deployment.imagePullPolicy}}}
+          image: {{{auth-two-containers-con.image}}}
+          ports:
+            - containerPort: {{{deployment.containerPort}}}
+          livenessProbe:
+            httpGet:
+              path: {{{deployment.livenessProbe.path}}}
+              port: {{deployment.livenessProbe.port}}
+            initialDelaySeconds: {{deployment.livenessProbe.initialDelaySeconds}}
+            timeoutSeconds: {{deployment.livenessProbe.timeoutSeconds}}
+          env:
+          {{#auth-two-containers-con.env}}
+            - name: {{{name}}}
+              value: {{{value}}}
+          {{/auth-two-containers-con.env}}
+        - name: auth-two-containers-datadog-con
+          imagePullPolicy: {{{deployment.imagePullPolicy}}}
+          image: {{{auth-two-containers-datadog-con.image}}}
+          ports:
+            - containerPort: {{{deployment.containerPort}}}
+          livenessProbe:
+            httpGet:
+              path: {{{deployment.livenessProbe.path}}}
+              port: {{deployment.livenessProbe.port}}
+            initialDelaySeconds: {{deployment.livenessProbe.initialDelaySeconds}}
+            timeoutSeconds: {{deployment.livenessProbe.timeoutSeconds}}
+          env:
+          {{#auth-two-containers-datadog-con.env}}
+            - name: {{{name}}}
+              value: {{{value}}}
+          {{/auth-two-containers-datadog-con.env}}
+      imagePullSecrets:
+      {{#imagePullSecrets}}
+        - name: {{{secret}}}
+      {{/imagePullSecrets}}
+    metadata:
+      labels:
+        name: auth-two-containers-pod
+        app: invisionapp
+  replicas: {{{deployment.replicaCount}}}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: {{{deployment.rollingUpdate.maxUnavailable}}}
+      maxSurge: {{{deployment.rollingUpdate.maxSurge}}}
+  selector:
+    matchLabels:
+      name: {{{name}}}-pod

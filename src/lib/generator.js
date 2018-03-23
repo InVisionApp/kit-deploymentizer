@@ -256,10 +256,18 @@ class Generator {
         if (!localConfig[containerName].image) {
           if (artifact.image_tag) {
             if (this.options.commitId) {
-              localConfig[
-                containerName
-              ].image = `quay.io/${artifact.image_tag}:release-${this.options
-                .commitId}`;
+              if (
+                this.isMatchingPrimaryImg(
+                  containers.length,
+                  artifact.name,
+                  artifact.primary
+                )
+              ) {
+                localConfig[
+                  containerName
+                ].image = `quay.io/${artifact.image_tag}:release-${this.options
+                  .commitId}`;
+              }
             } else {
               this.eventHandler.emitWarn(
                 `No SHA passed in for ${artifact.name}`
@@ -331,6 +339,17 @@ class Generator {
     }).bind(this)();
   }
 
+  isMatchingPrimaryImg(countContainers, resourceName, isPrimary) {
+    if (countContainers === 1) {
+      return true;
+    }
+    if (isPrimary === undefined) {
+      throw Error(
+        `No primary set for the resource ${resourceName} with containers > 1`
+      );
+    }
+    return isPrimary;
+  }
   /**
    * Verifies that the images being added here match the intended commit SHA
    * @param	{[type]} localConfig	the localConfig to validate

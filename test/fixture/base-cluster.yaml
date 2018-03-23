@@ -21,6 +21,28 @@ resources:
         env:
           - name: test
             value: testbase
+
+  auth-two-containers:
+    containers:
+      auth-two-containers-con:
+        image_tag: invision/auth-two-containers
+        name: auth-two-containers
+        annotations:
+          kit-deploymentizer/env-api-service: auth-two-containers
+      auth-two-containers-datadog-con:
+        image_tag: invision/auth-two-containers-datadog
+        name: auth-two-containers-datadog
+        annotations:
+          kit-deploymentizer/env-api-service: auth-two-containers-datadog
+    branch: develop
+    kind: deployment
+    file: ./auth-two-containers/auth-two-containers-deployment.mustache
+    svc:
+      name: auth-two-containers-svc
+      labels:
+        - name: "app"
+          value: "invisionapp"
+
   activity:
     kind: deployment
     file: ./activity/activity-deployment.mustache
@@ -33,8 +55,6 @@ resources:
       activity-con:
         image_tag: invision/node-activity
         name: activity
-
-
   envsecret:
     kind: secret
     file: ./secrets/example-secret.mustache
