@@ -25,11 +25,13 @@ resources:
   auth-two-containers:
     containers:
       auth-two-containers-con:
+        primary: true
         image_tag: invision/auth-two-containers
         name: auth-two-containers
         annotations:
           kit-deploymentizer/env-api-service: auth-two-containers
       auth-two-containers-datadog-con:
+        primary: false
         image_tag: invision/auth-two-containers-datadog
         name: auth-two-containers-datadog
         annotations:
