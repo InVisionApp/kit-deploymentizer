@@ -5,7 +5,6 @@ const path = require("path");
 const Promise = require("bluebird");
 const yamlHandler = require("../util/yaml-handler");
 const resourceHandler = require("../util/resource-handler");
-const FeatureFlag = require("./feauture-flag");
 const fse = require("fs-extra");
 const fseCopy = Promise.promisify(fse.copy);
 const fseMkdirs = Promise.promisify(fse.mkdirs);
@@ -369,7 +368,20 @@ class Generator {
     const featureName = "kit.deploymentizer.image.sha";
     const featureUser = { key: "engineering-velocity@invisionapp.com" };
 
+    // client launchdarkly could have problems on init -> client undefined
     if (!self.launchDarkly) {
+      const errStr = `Launchdarkly error in ${featureName} for resource ${artifact.name}: client undefined`;
+      self.eventHandler.emitWarn(errStr);
+      self.eventHandler.emitMetric({
+        kind: "event",
+        title: "Launchdarkly error",
+        text: errStr,
+        tags: {
+          app: "kit_deploymentizer",
+          kit_resource: artifact.name,
+          feature_name: featureName
+        }
+      });
       return self.setImageDefault(containerName, localConfig, artifact);
     }
 

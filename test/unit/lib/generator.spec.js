@@ -95,13 +95,9 @@ describe("Generator", () => {
 
     it("should send event to DD without SHA", () => {
       let events = new EventHandler();
+
       events.on("metric", function(msg) {
-        expect(msg).to.deep.equal({
-          kind: "event",
-          title: "No SHA passed in",
-          text: "No SHA passsed in for resource auth",
-          tags: { app: "kit_deploymentizer", kit_resource: "auth" }
-        });
+        expect(msg.kind).to.equal("event");
       });
 
       return YamlHandler.loadClusterDefinitions(
@@ -126,7 +122,7 @@ describe("Generator", () => {
           clusterDef.configuration(),
           "auth",
           clusterDef.resources().auth
-        );
+        ).should.be.fulfilled;
       });
     });
 
@@ -375,6 +371,115 @@ describe("Generator", () => {
             expect(localConfig.svc).to.exist;
             expect(localConfig[serviceName + "-con"].image).to.equal(
               `quay.io/invision/auth-two-containers:release-${sha}`
+            );
+          });
+      });
+    });
+
+    it("should set the image as default when no launchdarkly client defined", () => {
+      let events = new EventHandler();
+
+      events.on("metric", function(msg) {
+        expect(msg.kind).to.equal("event");
+        expect(msg.text).to.contains("Launchdarkly error");
+        expect(msg.text).to.contains("client undefined");
+      });
+
+      const serviceName = "auth";
+      return YamlHandler.loadClusterDefinitions(
+        "./test/fixture/clusters"
+      ).should.be.fulfilled.then(clusterDefs => {
+        const sha = "abc2"; //matching the same commitId as defined above in imageResources
+        const clusterDef = clusterDefs[3];
+
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          undefined,
+          undefined,
+          events,
+          undefined,
+          undefined,
+          sha,
+          undefined
+        );
+        expect(clusterDef).to.exist;
+
+        // image_tag needed, since we dont preload the base cluster def in this test
+        let auth = clusterDef.resources().auth;
+        auth.containers[serviceName + "-con"].image_tag = "node-auth";
+
+        return generator
+          ._createLocalConfiguration(
+            clusterDef.configuration(),
+            serviceName,
+            auth
+          )
+          .should.be.fulfilled.then(localConfig => {
+            expect(localConfig).to.exist;
+            expect(localConfig.svc).to.exist;
+            expect(localConfig[serviceName + "-con"].image).to.be.equal(
+              developImage
+            );
+          });
+      });
+    });
+
+    it("should set the image as default when error in launchdarkly even whether commitId is passed in", () => {
+      const mockFlagError = {
+        variation: function(feature, user, b, callbackFn) {
+          callbackFn(new Error("feature error here"), true);
+        }
+      };
+      let events = new EventHandler();
+
+      events.on("metric", function(msg) {
+        expect(msg.kind).to.equal("event");
+        expect(msg.text).to.contains("Launchdarkly error");
+        expect(msg.text).to.contains("feature error");
+      });
+
+      const serviceName = "auth";
+      return YamlHandler.loadClusterDefinitions(
+        "./test/fixture/clusters"
+      ).should.be.fulfilled.then(clusterDefs => {
+        const sha = "abc2"; //matching the same commitId as defined above in imageResources
+        const clusterDef = clusterDefs[3];
+
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          undefined,
+          undefined,
+          events,
+          undefined,
+          undefined,
+          sha,
+          mockFlagError
+        );
+        expect(clusterDef).to.exist;
+
+        // image_tag needed, since we dont preload the base cluster def in this test
+        let auth = clusterDef.resources().auth;
+        auth.containers[serviceName + "-con"].image_tag = "node-auth";
+
+        return generator
+          ._createLocalConfiguration(
+            clusterDef.configuration(),
+            serviceName,
+            auth
+          )
+          .should.be.fulfilled.then(localConfig => {
+            expect(localConfig).to.exist;
+            expect(localConfig.svc).to.exist;
+            expect(localConfig[serviceName + "-con"].image).to.be.equal(
+              developImage
             );
           });
       });
