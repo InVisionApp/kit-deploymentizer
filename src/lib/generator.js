@@ -50,6 +50,7 @@ class Generator {
 	 * @param	{[type]} deployId					 DeployId to use when generating manifests, switch to uuid from elroy
 	 * @param	{[type]} fastRollback			 Determines if fastRollback support is enabled. used by manifest generation
 	 * @param	{[type]} commitId   			 (optional) The SHA of the commit that originated this generation request
+	 * @param	{[type]} launchDarkly			 client of launchdarkly, could be undefined
 	 */
   constructor(
     clusterDef,
@@ -62,7 +63,8 @@ class Generator {
     eventHandler,
     deployId,
     fastRollback,
-    commitId
+    commitId,
+    launchDarkly
   ) {
     this.options = {
       clusterDef: clusterDef,
@@ -77,7 +79,7 @@ class Generator {
     };
     this.configPlugin = configPlugin;
     this.eventHandler = eventHandler;
-    this.flag = new FeatureFlag();
+    this.launchDarkly = launchDarkly || undefined;
   }
 
   /**
@@ -257,53 +259,12 @@ class Generator {
         //	 if not defined skip
         if (!localConfig[containerName].image) {
           if (artifact.image_tag) {
-            if (this.flag.isEnabled("shaImage") && this.options.commitId) {
-              if (
-                this.isMatchingPrimaryImg(
-                  containers.length,
-                  artifact.name,
-                  artifact.primary
-                )
-              ) {
-                localConfig[
-                  containerName
-                ].image = `quay.io/${artifact.image_tag}:release-${this.options
-                  .commitId}`;
-              }
-            } else {
-              if (this.flag.isEnabled("shaImage")) {
-                this.eventHandler.emitWarn(
-                  `No SHA passed in for ${artifact.name}`
-                );
-                this.eventHandler.emitMetric({
-                  kind: "event",
-                  title: "No SHA passed in",
-                  text: `No SHA passsed in for resource ${artifact.name}`,
-                  tags: {
-                    app: "kit_deploymentizer",
-                    kit_resource: artifact.name
-                  }
-                });
-              }
-              const artifactBranch =
-                localConfig[containerName].branch || localConfig.branch;
-              if (
-                !this.options.imageResourceDefs[artifact.image_tag] ||
-                !this.options.imageResourceDefs[artifact.image_tag][
-                  artifactBranch
-                ]
-              ) {
-                this.eventHandler.emitWarn(
-                  JSON.stringify(this.options.imageResourceDefs)
-                );
-                throw new Error(
-                  `Image ${artifact.image_tag} not found for defined branch (${artifactBranch})`
-                );
-              }
-              localConfig[containerName].image = this.options.imageResourceDefs[
-                artifact.image_tag
-              ][artifactBranch].image;
-            }
+            this.setImage(
+              containers.length,
+              containerName,
+              localConfig,
+              artifact
+            );
           } else {
             this.eventHandler.emitWarn(
               `No image tag found for ${artifact.name}`
@@ -353,6 +314,100 @@ class Generator {
     }
     return isPrimary;
   }
+
+  setImageSHA(containersLength, containerName, localConfig, artifact) {
+    if (!this.options.commitId) {
+      this.eventHandler.emitWarn(`No SHA passed in for ${artifact.name}`);
+      this.eventHandler.emitMetric({
+        kind: "event",
+        title: "No SHA passed in",
+        text: `No SHA passsed in for resource ${artifact.name}`,
+        tags: {
+          app: "kit_deploymentizer",
+          kit_resource: artifact.name
+        }
+      });
+      this.setImageDefault(containerName, localConfig, artifact);
+      return;
+    }
+
+    if (
+      this.isMatchingPrimaryImg(
+        containersLength,
+        artifact.name,
+        artifact.primary
+      )
+    ) {
+      localConfig[
+        containerName
+      ].image = `quay.io/${artifact.image_tag}:release-${this.options
+        .commitId}`;
+    }
+  }
+
+  setImageDefault(containerName, localConfig, artifact) {
+    const artifactBranch =
+      localConfig[containerName].branch || localConfig.branch;
+    if (
+      !this.options.imageResourceDefs[artifact.image_tag] ||
+      !this.options.imageResourceDefs[artifact.image_tag][artifactBranch]
+    ) {
+      this.eventHandler.emitWarn(
+        JSON.stringify(this.options.imageResourceDefs)
+      );
+      throw new Error(
+        `Image ${artifact.image_tag} not found for defined branch (${artifactBranch})`
+      );
+    }
+    localConfig[containerName].image = this.options.imageResourceDefs[
+      artifact.image_tag
+    ][artifactBranch].image;
+  }
+
+  setImage(containersLength, containerName, localConfig, artifact) {
+    const self = this;
+    const featureName = "kit.deploymentizer.image.sha";
+    const featureUser = { key: "engineering-velocity@invisionapp.com" };
+
+    if (!self.launchDarkly) {
+      return self.setImageDefault(containerName, localConfig, artifact);
+    }
+
+    self.launchDarkly.variation(featureName, featureUser, false, function(
+      err,
+      showFeature
+    ) {
+      if (err) {
+        const errMsg = err.message ? err.message : err;
+        const errAsStr = `Launchdarkly error in ${featureName} for resource ${artifact.name}: ${errMsg}`;
+        self.eventHandler.emitWarn(errAsStr);
+        self.eventHandler.emitMetric({
+          kind: "event",
+          title: "Launchdarkly error",
+          text: errAsStr,
+          tags: {
+            app: "kit_deploymentizer",
+            kit_resource: artifact.name,
+            feature_name: featureName
+          }
+        });
+        // do the old image if error on launchdarkly
+        self.setImageDefault(containerName, localConfig, artifact);
+        return;
+      }
+      if (showFeature) {
+        self.setImageSHA(
+          containersLength,
+          containerName,
+          localConfig,
+          artifact
+        );
+      } else {
+        self.setImageDefault(containerName, localConfig, artifact);
+      }
+    });
+  }
+
   /**
    * Verifies that the images being added here match the intended commit SHA
    * @param	{[type]} localConfig	the localConfig to validate

@@ -93,10 +93,6 @@ describe("Generator", () => {
       }
     };
 
-    afterEach(() => {
-      delete process.env["FEATURES_ENABLED"];
-    });
-
     it("should send event to DD without SHA", () => {
       let events = new EventHandler();
       events.on("metric", function(msg) {
@@ -107,7 +103,6 @@ describe("Generator", () => {
           tags: { app: "kit_deploymentizer", kit_resource: "auth" }
         });
       });
-      process.env["FEATURES_ENABLED"] = "shaImage";
 
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
@@ -235,15 +230,16 @@ describe("Generator", () => {
     });
 
     it("should set the image as commitId when is passed in for one container", () => {
-      process.env["FEATURES_ENABLED"] = "shaImage";
-
+      const mockFlagMatch = {
+        variation: function(feature, user, b, callbackFn) {
+          callbackFn(undefined, true);
+        }
+      };
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
       ).should.be.fulfilled.then(clusterDefs => {
         const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
         const clusterDef = clusterDefs[3];
-        let auth = clusterDef.cluster.resources["auth"];
-        auth.containers["auth-con"].image_tag = "invision/auth";
         const generator = new Generator(
           clusterDef,
           imageResources,
@@ -255,9 +251,14 @@ describe("Generator", () => {
           new EventHandler(),
           undefined,
           undefined,
-          sha
+          sha,
+          mockFlagMatch
         );
         expect(clusterDef).to.exist;
+
+        // image_tag needed, since we dont preload the base cluster def in this test
+        let auth = clusterDef.cluster.resources["auth"];
+        auth.containers["auth-con"].image_tag = "invision/auth";
 
         return generator
           ._createLocalConfiguration(
@@ -276,7 +277,11 @@ describe("Generator", () => {
     });
 
     it("should throw an error when no primary set for service with 2 containers and commitId is passed in", () => {
-      process.env["FEATURES_ENABLED"] = "shaImage";
+      const mockFlagMatch = {
+        variation: function(feature, user, b, callbackFn) {
+          callbackFn(undefined, true);
+        }
+      };
 
       const serviceName = "auth-two-containers";
       return YamlHandler.loadClusterDefinitions(
@@ -284,9 +289,6 @@ describe("Generator", () => {
       ).should.be.fulfilled.then(clusterDefs => {
         const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
         const clusterDef = clusterDefs[3];
-        const resource = clusterDef.cluster.resources[serviceName];
-        resource.containers[serviceName + "-con"].image_tag =
-          "invision/" + serviceName;
 
         const generator = new Generator(
           clusterDef,
@@ -299,9 +301,15 @@ describe("Generator", () => {
           new EventHandler(),
           undefined,
           undefined,
-          sha
+          sha,
+          mockFlagMatch
         );
         expect(clusterDef).to.exist;
+
+        // image_tag needed, since we dont preload the base cluster def in this test
+        const resource = clusterDef.cluster.resources[serviceName];
+        resource.containers[serviceName + "-con"].image_tag =
+          "invision/" + serviceName;
 
         return generator
           ._createLocalConfiguration(
@@ -316,7 +324,11 @@ describe("Generator", () => {
     });
 
     it("should set the image when primary set for service with 2 containers and commitId is passed in", () => {
-      process.env["FEATURES_ENABLED"] = "shaImage";
+      const mockFlagMatch = {
+        variation: function(feature, user, b, callbackFn) {
+          callbackFn(undefined, true);
+        }
+      };
 
       const serviceName = "auth-two-containers";
       return YamlHandler.loadClusterDefinitions(
@@ -324,15 +336,6 @@ describe("Generator", () => {
       ).should.be.fulfilled.then(clusterDefs => {
         const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
         const clusterDef = clusterDefs[3];
-        const resource = clusterDef.cluster.resources[serviceName];
-        let primaryContainer = resource.containers[serviceName + "-con"];
-        primaryContainer.image_tag = "invision/" + serviceName;
-        primaryContainer.primary = true;
-
-        let secondaryContainer =
-          resource.containers[serviceName + "-datadog-con"];
-        secondaryContainer.image_tag = "invision/" + serviceName + "-datadog";
-        secondaryContainer.primary = false;
 
         const generator = new Generator(
           clusterDef,
@@ -345,9 +348,21 @@ describe("Generator", () => {
           new EventHandler(),
           undefined,
           undefined,
-          sha
+          sha,
+          mockFlagMatch
         );
         expect(clusterDef).to.exist;
+
+        // image_tag and primary needed, since we dont preload the base cluster def in this test
+        const resource = clusterDef.cluster.resources[serviceName];
+        let primaryContainer = resource.containers[serviceName + "-con"];
+        primaryContainer.image_tag = "invision/" + serviceName;
+        primaryContainer.primary = true;
+
+        let secondaryContainer =
+          resource.containers[serviceName + "-datadog-con"];
+        secondaryContainer.image_tag = "invision/" + serviceName + "-datadog";
+        secondaryContainer.primary = false;
 
         return generator
           ._createLocalConfiguration(

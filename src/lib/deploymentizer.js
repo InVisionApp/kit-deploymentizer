@@ -50,7 +50,8 @@ class Deploymentizer {
       clusterName: args.clusterName || undefined,
       deployId: args.deployId || undefined,
       fastRollback: args.fastRollback || false,
-      commitId: args.commitId || undefined
+      commitId: args.commitId || undefined,
+      launchDarkly: args.launchDarkly || undefined
     };
     this.options.conf = this.parseConf(args.conf);
     this.events = new EventHandler();
@@ -264,7 +265,8 @@ class Deploymentizer {
           this.events,
           this.options.deployId,
           this.options.fastRollback,
-          this.options.commitId
+          this.options.commitId,
+          this.options.launchDarkly
         );
         return Promise.all([elroyProm, generator.process()]);
       }
