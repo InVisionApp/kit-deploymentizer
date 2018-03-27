@@ -100,6 +100,14 @@ describe("Generator", () => {
         expect(msg.kind).to.equal("event");
       });
 
+      const mockLaunchDarkly = {
+        toogle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(false);
+          });
+        }
+      };
+
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
       ).should.be.fulfilled.then(clusterDefs => {
@@ -112,7 +120,11 @@ describe("Generator", () => {
           true,
           configStub,
           undefined,
-          events
+          events,
+          undefined,
+          undefined,
+          undefined,
+          mockLaunchDarkly
         );
         // we add the image tag here, since we dont preload the base cluster def in this test
         clusterDef.resources().auth.containers["auth-con"].image_tag =
@@ -127,6 +139,14 @@ describe("Generator", () => {
     });
 
     it("should create copy of config, merging in values from resource", () => {
+      const mockLaunchDarkly = {
+        toogle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(false);
+          });
+        }
+      };
+
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
       ).should.be.fulfilled.then(clusterDefs => {
@@ -139,7 +159,11 @@ describe("Generator", () => {
           true,
           configStub,
           undefined,
-          new EventHandler()
+          new EventHandler(),
+          undefined,
+          undefined,
+          undefined,
+          mockLaunchDarkly
         );
 
         if (!fse.existsSync(path.join(os.tmpdir(), clusterDef.name()))) {
@@ -178,6 +202,14 @@ describe("Generator", () => {
     });
 
     it("should create copy of config, without plugin", () => {
+      const mockLaunchDarkly = {
+        toogle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(false);
+          });
+        }
+      };
+
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
       ).should.be.fulfilled.then(clusterDefs => {
@@ -190,7 +222,11 @@ describe("Generator", () => {
           true,
           undefined,
           undefined,
-          new EventHandler()
+          new EventHandler(),
+          undefined,
+          undefined,
+          undefined,
+          mockLaunchDarkly
         );
         expect(clusterDef).to.exist;
 
@@ -226,9 +262,11 @@ describe("Generator", () => {
     });
 
     it("should set the image as commitId when is passed in for one container", () => {
-      const mockFlagMatch = {
-        variation: function(feature, user, b, callbackFn) {
-          callbackFn(undefined, true);
+      const mockLaunchDarkly = {
+        toogle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(true);
+          });
         }
       };
       return YamlHandler.loadClusterDefinitions(
@@ -248,7 +286,7 @@ describe("Generator", () => {
           undefined,
           undefined,
           sha,
-          mockFlagMatch
+          mockLaunchDarkly
         );
         expect(clusterDef).to.exist;
 
@@ -273,9 +311,11 @@ describe("Generator", () => {
     });
 
     it("should throw an error when no primary set for service with 2 containers and commitId is passed in", () => {
-      const mockFlagMatch = {
-        variation: function(feature, user, b, callbackFn) {
-          callbackFn(undefined, true);
+      const mockLaunchDarkly = {
+        toogle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(true);
+          });
         }
       };
 
@@ -298,7 +338,7 @@ describe("Generator", () => {
           undefined,
           undefined,
           sha,
-          mockFlagMatch
+          mockLaunchDarkly
         );
         expect(clusterDef).to.exist;
 
@@ -320,9 +360,11 @@ describe("Generator", () => {
     });
 
     it("should set the image when primary set for service with 2 containers and commitId is passed in", () => {
-      const mockFlagMatch = {
-        variation: function(feature, user, b, callbackFn) {
-          callbackFn(undefined, true);
+      const mockLaunchDarkly = {
+        toogle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(true);
+          });
         }
       };
 
@@ -345,7 +387,7 @@ describe("Generator", () => {
           undefined,
           undefined,
           sha,
-          mockFlagMatch
+          mockLaunchDarkly
         );
         expect(clusterDef).to.exist;
 
@@ -376,70 +418,19 @@ describe("Generator", () => {
       });
     });
 
-    it("should set the image as default when no launchdarkly client defined", () => {
-      let events = new EventHandler();
-
-      events.on("metric", function(msg) {
-        expect(msg.kind).to.equal("event");
-        expect(msg.text).to.contains("Launchdarkly error");
-        expect(msg.text).to.contains("client undefined");
-      });
-
-      const serviceName = "auth";
-      return YamlHandler.loadClusterDefinitions(
-        "./test/fixture/clusters"
-      ).should.be.fulfilled.then(clusterDefs => {
-        const sha = "abc2"; //matching the same commitId as defined above in imageResources
-        const clusterDef = clusterDefs[3];
-
-        const generator = new Generator(
-          clusterDef,
-          imageResources,
-          "./test/fixture/resources",
-          os.tmpdir(),
-          true,
-          undefined,
-          undefined,
-          events,
-          undefined,
-          undefined,
-          sha,
-          undefined
-        );
-        expect(clusterDef).to.exist;
-
-        // image_tag needed, since we dont preload the base cluster def in this test
-        let auth = clusterDef.resources().auth;
-        auth.containers[serviceName + "-con"].image_tag = "node-auth";
-
-        return generator
-          ._createLocalConfiguration(
-            clusterDef.configuration(),
-            serviceName,
-            auth
-          )
-          .should.be.fulfilled.then(localConfig => {
-            expect(localConfig).to.exist;
-            expect(localConfig.svc).to.exist;
-            expect(localConfig[serviceName + "-con"].image).to.be.equal(
-              developImage
-            );
-          });
-      });
-    });
-
     it("should set the image as default when error in launchdarkly even whether commitId is passed in", () => {
       const mockFlagError = {
-        variation: function(feature, user, b, callbackFn) {
-          callbackFn(new Error("feature error here"), true);
+        toogle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(false); // our ld client resolve to false always when ld has an internal error
+          });
         }
       };
       let events = new EventHandler();
 
       events.on("metric", function(msg) {
         expect(msg.kind).to.equal("event");
-        expect(msg.text).to.contains("Launchdarkly error");
-        expect(msg.text).to.contains("feature error");
+        expect(msg.text).to.contains("launchdarkly error");
       });
 
       const serviceName = "auth";

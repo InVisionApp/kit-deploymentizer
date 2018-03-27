@@ -49,7 +49,7 @@ class Generator {
 	 * @param	{[type]} deployId					 DeployId to use when generating manifests, switch to uuid from elroy
 	 * @param	{[type]} fastRollback			 Determines if fastRollback support is enabled. used by manifest generation
 	 * @param	{[type]} commitId   			 (optional) The SHA of the commit that originated this generation request
-	 * @param	{[type]} launchDarkly			 client of launchdarkly, could be undefined
+	 * @param	{[type]} launchDarkly			 LaunchDarkly client
 	 */
   constructor(
     clusterDef,
@@ -78,7 +78,7 @@ class Generator {
     };
     this.configPlugin = configPlugin;
     this.eventHandler = eventHandler;
-    this.launchDarkly = launchDarkly || undefined;
+    this.launchDarkly = launchDarkly;
   }
 
   /**
@@ -258,7 +258,7 @@ class Generator {
         //	 if not defined skip
         if (!localConfig[containerName].image) {
           if (artifact.image_tag) {
-            this.setImage(
+            yield this.setImage(
               containers.length,
               containerName,
               localConfig,
@@ -365,37 +365,29 @@ class Generator {
 
   setImage(containersLength, containerName, localConfig, artifact) {
     const self = this;
-    const featureName = "kit.deploymentizer.image.sha";
-    const featureUser = { key: "engineering-velocity@invisionapp.com" };
+    const featureName = "kit-deploymentizer-78-image-sha";
 
-    // client launchdarkly could have problems on init -> client undefined
-    if (!self.launchDarkly) {
-      const errStr = `Launchdarkly error in ${featureName} for resource ${artifact.name}: client undefined`;
-      self.eventHandler.emitWarn(errStr);
-      self.eventHandler.emitMetric({
-        kind: "event",
-        title: "Launchdarkly error",
-        text: errStr,
-        tags: {
-          app: "kit_deploymentizer",
-          kit_resource: artifact.name,
-          feature_name: featureName
+    return self.launchDarkly
+      .toogle(featureName)
+      .then(isEnabled => {
+        if (isEnabled) {
+          self.setImageSHA(
+            containersLength,
+            containerName,
+            localConfig,
+            artifact
+          );
+        } else {
+          self.setImageDefault(containerName, localConfig, artifact);
         }
-      });
-      return self.setImageDefault(containerName, localConfig, artifact);
-    }
-
-    self.launchDarkly.variation(featureName, featureUser, false, function(
-      err,
-      showFeature
-    ) {
-      if (err) {
+      })
+      .catch(err => {
         const errMsg = err.message ? err.message : err;
-        const errAsStr = `Launchdarkly error in ${featureName} for resource ${artifact.name}: ${errMsg}`;
+        const errAsStr = `Error setting image for resource ${artifact.name}: ${errMsg}`;
         self.eventHandler.emitWarn(errAsStr);
         self.eventHandler.emitMetric({
           kind: "event",
-          title: "Launchdarkly error",
+          title: "Kitserver - Error setting image",
           text: errAsStr,
           tags: {
             app: "kit_deploymentizer",
@@ -403,21 +395,8 @@ class Generator {
             feature_name: featureName
           }
         });
-        // do the old image if error on launchdarkly
-        self.setImageDefault(containerName, localConfig, artifact);
-        return;
-      }
-      if (showFeature) {
-        self.setImageSHA(
-          containersLength,
-          containerName,
-          localConfig,
-          artifact
-        );
-      } else {
-        self.setImageDefault(containerName, localConfig, artifact);
-      }
-    });
+        throw Error(errMsg);
+      });
   }
 
   /**
