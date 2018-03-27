@@ -101,7 +101,7 @@ describe("Generator", () => {
       });
 
       const mockLaunchDarkly = {
-        toogle: function(feature) {
+        toggle: function(feature) {
           return new Promise((resolve, reject) => {
             return resolve(false);
           });
@@ -140,7 +140,7 @@ describe("Generator", () => {
 
     it("should create copy of config, merging in values from resource", () => {
       const mockLaunchDarkly = {
-        toogle: function(feature) {
+        toggle: function(feature) {
           return new Promise((resolve, reject) => {
             return resolve(false);
           });
@@ -203,7 +203,7 @@ describe("Generator", () => {
 
     it("should create copy of config, without plugin", () => {
       const mockLaunchDarkly = {
-        toogle: function(feature) {
+        toggle: function(feature) {
           return new Promise((resolve, reject) => {
             return resolve(false);
           });
@@ -263,7 +263,7 @@ describe("Generator", () => {
 
     it("should set the image as commitId when is passed in for one container", () => {
       const mockLaunchDarkly = {
-        toogle: function(feature) {
+        toggle: function(feature) {
           return new Promise((resolve, reject) => {
             return resolve(true);
           });
@@ -312,7 +312,7 @@ describe("Generator", () => {
 
     it("should throw an error when no primary set for service with 2 containers and commitId is passed in", () => {
       const mockLaunchDarkly = {
-        toogle: function(feature) {
+        toggle: function(feature) {
           return new Promise((resolve, reject) => {
             return resolve(true);
           });
@@ -361,7 +361,7 @@ describe("Generator", () => {
 
     it("should set the image when primary set for service with 2 containers and commitId is passed in", () => {
       const mockLaunchDarkly = {
-        toogle: function(feature) {
+        toggle: function(feature) {
           return new Promise((resolve, reject) => {
             return resolve(true);
           });
@@ -420,7 +420,7 @@ describe("Generator", () => {
 
     it("should set the image as default when error in launchdarkly even whether commitId is passed in", () => {
       const mockFlagError = {
-        toogle: function(feature) {
+        toggle: function(feature) {
           return new Promise((resolve, reject) => {
             return resolve(false); // our ld client resolve to false always when ld has an internal error
           });

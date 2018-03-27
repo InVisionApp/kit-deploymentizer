@@ -368,7 +368,7 @@ class Generator {
     const featureName = "kit-deploymentizer-78-image-sha";
 
     return self.launchDarkly
-      .toogle(featureName)
+      .toggle(featureName)
       .then(isEnabled => {
         if (isEnabled) {
           self.setImageSHA(
