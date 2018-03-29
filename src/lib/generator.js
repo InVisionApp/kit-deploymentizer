@@ -78,7 +78,7 @@ class Generator {
     };
     this.configPlugin = configPlugin;
     this.eventHandler = eventHandler;
-    this.launchDarkly = launchDarkly;
+    this.launchDarkly = launchDarkly || undefined;
   }
 
   /**
@@ -366,6 +366,27 @@ class Generator {
   setImage(containersLength, containerName, localConfig, artifact) {
     const self = this;
     const featureName = "kit-deploymentizer-78-image-sha";
+    if (!self.launchDarkly) {
+      const errAsStr = `Launchdarkly client is undefined for ${featureName}`;
+      self.eventHandler.emitWarn(errAsStr);
+      self.eventHandler.emitMetric({
+        kind: "event",
+        title: "Launchdarkly undefined",
+        text: errAsStr,
+        tags: {
+          app: "kit_deploymentizer",
+          kit_resource: artifact.name,
+          feature_name: featureName
+        }
+      });
+      try {
+        return Promise.resolve(
+          self.setImageDefault(containerName, localConfig, artifact)
+        );
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
 
     return self.launchDarkly
       .toggle(featureName)

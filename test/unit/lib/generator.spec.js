@@ -475,6 +475,56 @@ describe("Generator", () => {
           });
       });
     });
+
+    it("should go for branch default when launchdarkly client is not set", () => {
+      let events = new EventHandler();
+
+      events.on("metric", function(msg) {
+        expect(msg.kind).to.equal("event");
+        expect(msg.text).to.contains("Launchdarkly client is undefined");
+      });
+
+      const serviceName = "auth";
+      return YamlHandler.loadClusterDefinitions(
+        "./test/fixture/clusters"
+      ).should.be.fulfilled.then(clusterDefs => {
+        const sha = "abc2"; //matching the same commitId as defined above in imageResources
+        const clusterDef = clusterDefs[3];
+
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          undefined,
+          undefined,
+          events,
+          undefined,
+          undefined,
+          sha
+        );
+        expect(clusterDef).to.exist;
+
+        // image_tag needed, since we dont preload the base cluster def in this test
+        let auth = clusterDef.resources().auth;
+        auth.containers[serviceName + "-con"].image_tag = "node-auth";
+
+        return generator
+          ._createLocalConfiguration(
+            clusterDef.configuration(),
+            serviceName,
+            auth
+          )
+          .should.be.fulfilled.then(localConfig => {
+            expect(localConfig).to.exist;
+            expect(localConfig.svc).to.exist;
+            expect(localConfig[serviceName + "-con"].image).to.be.equal(
+              developImage
+            );
+          });
+      });
+    });
   });
 
   describe("Verifying commit SHA", () => {
