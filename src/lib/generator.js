@@ -325,7 +325,8 @@ class Generator {
         text: `No SHA passsed in for resource ${artifact.name}`,
         tags: {
           app: "kit_deploymentizer",
-          kit_resource: artifact.name
+          kit_resource: artifact.name,
+          feature_name: featureImgShaName
         }
       });
       this.setImageDefault(containerName, localConfig, artifact);
@@ -394,16 +395,22 @@ class Generator {
     return self.launchDarkly
       .toggle(featureImgShaName)
       .then(isEnabled => {
+        self.eventHandler.emitMetric({
+          kind: "increment",
+          name: isEnabled ? "feature.enabled" : "feature.disabled",
+          tags: tags
+        });
+
         if (isEnabled) {
-          self.setImageSHA(
+          return self.setImageSHA(
             containersLength,
             containerName,
             localConfig,
             artifact
           );
-        } else {
-          self.setImageDefault(containerName, localConfig, artifact);
         }
+
+        return self.setImageDefault(containerName, localConfig, artifact);
       })
       .catch(err => {
         const errMsg = err.message ? err.message : err;

@@ -93,11 +93,12 @@ describe("Generator", () => {
       }
     };
 
-    it("should send event to DD without SHA", () => {
+    it("should send to DD an incr when feature disabled", () => {
       let events = new EventHandler();
 
       events.on("metric", function(msg) {
-        expect(msg.kind).to.equal("event");
+        expect(msg.kind).to.equal("increment");
+        expect(msg.name).to.equal("feature.disabled");
       });
 
       const mockLaunchDarkly = {
@@ -429,8 +430,8 @@ describe("Generator", () => {
       let events = new EventHandler();
 
       events.on("metric", function(msg) {
-        expect(msg.kind).to.equal("event");
-        expect(msg.text).to.contains("launchdarkly error");
+        expect(msg.kind).to.equal("increment");
+        expect(msg.name).to.contains("feature.disabled");
       });
 
       const serviceName = "auth";
