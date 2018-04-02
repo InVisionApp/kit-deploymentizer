@@ -10,6 +10,8 @@ const fseCopy = Promise.promisify(fse.copy);
 const fseMkdirs = Promise.promisify(fse.mkdirs);
 const fseReadFile = Promise.promisify(fse.readFile);
 
+const featureImgShaName = "kit-deploymentizer-78-image-sha";
+
 /**
  * Creates the cluster directory if it already does not exist - async operation.
  * @param	{string} path to directory to create
@@ -365,31 +367,32 @@ class Generator {
 
   setImage(containersLength, containerName, localConfig, artifact) {
     const self = this;
-    const featureName = "kit-deploymentizer-78-image-sha";
+    const tags = {
+      app: "kit_deploymentizer",
+      kit_resource: artifact.name,
+      feature_name: featureImgShaName
+    };
+
     if (!self.launchDarkly) {
-      const errAsStr = `Launchdarkly client is undefined for ${featureName}`;
+      const errAsStr = `Launchdarkly client is undefined for ${featureImgShaName}`;
       self.eventHandler.emitWarn(errAsStr);
       self.eventHandler.emitMetric({
         kind: "event",
         title: "Launchdarkly undefined",
         text: errAsStr,
-        tags: {
-          app: "kit_deploymentizer",
-          kit_resource: artifact.name,
-          feature_name: featureName
-        }
+        tags: tags
       });
+
       try {
-        return Promise.resolve(
-          self.setImageDefault(containerName, localConfig, artifact)
-        );
+        self.setImageDefault(containerName, localConfig, artifact);
+        return Promise.resolve("ok");
       } catch (err) {
         return Promise.reject(err);
       }
     }
 
     return self.launchDarkly
-      .toggle(featureName)
+      .toggle(featureImgShaName)
       .then(isEnabled => {
         if (isEnabled) {
           self.setImageSHA(
@@ -410,11 +413,7 @@ class Generator {
           kind: "event",
           title: "Kitserver - Error setting image",
           text: errAsStr,
-          tags: {
-            app: "kit_deploymentizer",
-            kit_resource: artifact.name,
-            feature_name: featureName
-          }
+          tags: tags
         });
         throw Error(errMsg);
       });
