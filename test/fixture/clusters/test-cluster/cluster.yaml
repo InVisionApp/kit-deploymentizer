@@ -19,3 +19,21 @@ resources:
             value: testvalue
   activity:
     disable: true
+  auth-two-containers:
+    branch: develop
+    svc:
+      name: auth-two-containers-svc
+      labels:
+        - name: "app"
+          value: "invisionapp"
+    containers:
+      auth-two-containers-con:
+        name: auth-two-containers
+        env:
+          - name: test
+            value: testvalue
+      auth-two-containers-datadog-con:
+        name: auth-two-containers-datadog
+        env:
+          - name: test
+            value: testvalue

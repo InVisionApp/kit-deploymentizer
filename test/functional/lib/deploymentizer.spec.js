@@ -10,6 +10,8 @@ const mockery = require("mockery");
 let Deploymentizer, yamlHandler, resourceHandler;
 
 describe("Deploymentizer", () => {
+  let mockFlagDefault;
+
   before(function(done) {
     mockery.enable({
       warnOnReplace: false,
@@ -24,6 +26,15 @@ describe("Deploymentizer", () => {
     Deploymentizer = require("../../../src/lib/deploymentizer");
     yamlHandler = require("../../../src/util/yaml-handler");
     resourceHandler = require("../../../src/util/resource-handler");
+
+    mockFlagDefault = {
+      toggle: function(feature) {
+        return new Promise((resolve, reject) => {
+          return resolve(false);
+        });
+      }
+    };
+
     done();
   });
 
@@ -47,7 +58,8 @@ describe("Deploymentizer", () => {
           elroySecret: "123abc",
           clean: true,
           save: true,
-          conf: conf
+          conf: conf,
+          launchDarkly: mockFlagDefault
         });
         // multiple events will get fired for failure cluster.
         deployer.events.on(deployer.events.WARN, function(message) {
@@ -167,7 +179,8 @@ describe("Deploymentizer", () => {
           conf: conf,
           deployId: "SOME-SHA",
           resource: "auth",
-          fastRollback: true
+          fastRollback: true,
+          launchDarkly: mockFlagDefault
         });
         // multiple events will get fired for failure cluster.
         deployer.events.on(deployer.events.WARN, function(message) {
@@ -223,7 +236,8 @@ describe("Deploymentizer", () => {
           save: true,
           conf: conf,
           resource: "auth",
-          deployId: "SOME-SHA"
+          deployId: "SOME-SHA",
+          launchDarkly: mockFlagDefault
         });
         // multiple events will get fired for failure cluster.
         deployer.events.on(deployer.events.WARN, function(message) {
@@ -282,7 +296,8 @@ describe("Deploymentizer", () => {
           elroySecret: "123abc",
           clean: true,
           save: true,
-          conf: conf
+          conf: conf,
+          launchDarkly: mockFlagDefault
         });
         expect(deployer).to.exist;
         // generate the files from our test fixtures
@@ -345,7 +360,8 @@ describe("Deploymentizer", () => {
           clean: true,
           save: true,
           conf: conf,
-          resource: "activity"
+          resource: "activity",
+          launchDarkly: mockFlagDefault
         });
         expect(deployer).to.exist;
         // generate the files from our test fixtures
@@ -401,7 +417,8 @@ describe("Deploymentizer", () => {
           elroySecret: "123abc",
           clean: true,
           save: true,
-          conf: conf
+          conf: conf,
+          launchDarkly: mockFlagDefault
         });
         expect(deployer).to.exist;
         // generate the files from our test fixtures
@@ -435,7 +452,8 @@ describe("Deploymentizer", () => {
           clean: true,
           save: true,
           conf: conf,
-          clusterType: "test"
+          clusterType: "test",
+          launchDarkly: mockFlagDefault
         });
         expect(deployer).to.exist;
         // generate the files from our test fixtures

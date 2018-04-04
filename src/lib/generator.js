@@ -10,6 +10,8 @@ const fseCopy = Promise.promisify(fse.copy);
 const fseMkdirs = Promise.promisify(fse.mkdirs);
 const fseReadFile = Promise.promisify(fse.readFile);
 
+const featureImgShaName = "kit-deploymentizer-78-image-sha";
+
 /**
  * Creates the cluster directory if it already does not exist - async operation.
  * @param	{string} path to directory to create
@@ -38,17 +40,18 @@ function fileInfo(file) {
 class Generator {
   /**
 	 * Configuration options for Generator
-	 * @param	{[type]} clusterDef				Cluster Definition for a given cluster
+	 * @param	{[type]} clusterDef				 Cluster Definition for a given cluster
 	 * @param	{[type]} imageResourceDefs All Image Resources
-	 * @param	{[type]} basePath					Base Path to load Resources from
-	 * @param	{[type]} exportPath				Where to save files
-	 * @param	{[type]} save							Save or not
-	 * @param	{[type]} configPlugin			Plugin to use for loading configuration information
-	 * @param	{[type]} resource 				resource to process
-	 * @param	{[type]} eventHandler 		to log events to
-	 * @param	{[type]} deployId								deployId to use when generating manifests, switch to uuid from elroy
-	 * @param	{[type]} fastRollback			determines if fastRollback support is enabled. used by manifest generation
-	 * @param	{[type]} commitId   			(optional) The SHA of the commit that originated this generation request
+	 * @param	{[type]} basePath					 Base Path to load Resources from
+	 * @param	{[type]} exportPath				 Where to save files
+	 * @param	{[type]} save							 Save or not
+	 * @param	{[type]} configPlugin			 Plugin to use for loading configuration information
+	 * @param	{[type]} resource 				 Resource to process
+	 * @param	{[type]} eventHandler 		 To log events to
+	 * @param	{[type]} deployId					 DeployId to use when generating manifests, switch to uuid from elroy
+	 * @param	{[type]} fastRollback			 Determines if fastRollback support is enabled. used by manifest generation
+	 * @param	{[type]} commitId   			 (optional) The SHA of the commit that originated this generation request
+	 * @param	{[type]} launchDarkly			 LaunchDarkly client
 	 */
   constructor(
     clusterDef,
@@ -61,7 +64,8 @@ class Generator {
     eventHandler,
     deployId,
     fastRollback,
-    commitId
+    commitId,
+    launchDarkly
   ) {
     this.options = {
       clusterDef: clusterDef,
@@ -76,6 +80,7 @@ class Generator {
     };
     this.configPlugin = configPlugin;
     this.eventHandler = eventHandler;
+    this.launchDarkly = launchDarkly || undefined;
   }
 
   /**
@@ -255,29 +260,27 @@ class Generator {
         //	 if not defined skip
         if (!localConfig[containerName].image) {
           if (artifact.image_tag) {
-            const artifactBranch =
-              localConfig[containerName].branch || localConfig.branch;
-            if (
-              !this.options.imageResourceDefs[artifact.image_tag] ||
-              !this.options.imageResourceDefs[artifact.image_tag][
-                artifactBranch
-              ]
-            ) {
-              this.eventHandler.emitWarn(
-                JSON.stringify(this.options.imageResourceDefs)
-              );
-              throw new Error(
-                `Image ${artifact.image_tag} not found for defined branch (${artifactBranch})`
-              );
-            }
-            localConfig[containerName].image = this.options.imageResourceDefs[
-              artifact.image_tag
-            ][artifactBranch].image;
+            yield this.setImage(
+              containers.length,
+              containerName,
+              localConfig,
+              artifact
+            );
           } else {
             this.eventHandler.emitWarn(
               `No image tag found for ${artifact.name}`
             );
+            this.eventHandler.emitMetric({
+              kind: "event",
+              title: "No image tag found",
+              text: `No image tag found for resource ${artifact.name}`,
+              tags: {
+                app: "kit_deploymentizer",
+                kit_resource: artifact.name
+              }
+            });
           }
+          // already image tag
         } else {
           this.eventHandler.emitWarn(
             `Image ${localConfig[containerName]
@@ -299,6 +302,128 @@ class Generator {
       }
       return localConfig;
     }).bind(this)();
+  }
+
+  isMatchingPrimaryImg(countContainers, resourceName, isPrimary) {
+    if (countContainers === 1) {
+      return true;
+    }
+    if (isPrimary === undefined) {
+      throw Error(
+        `No primary set for the resource ${resourceName} with containers > 1`
+      );
+    }
+    return isPrimary;
+  }
+
+  setImageSHA(containersLength, containerName, localConfig, artifact) {
+    if (!this.options.commitId) {
+      this.eventHandler.emitWarn(`No SHA passed in for ${artifact.name}`);
+      this.eventHandler.emitMetric({
+        kind: "event",
+        title: "No SHA passed in",
+        text: `No SHA passsed in for resource ${artifact.name}`,
+        tags: {
+          app: "kit_deploymentizer",
+          kit_resource: artifact.name,
+          feature_name: featureImgShaName
+        }
+      });
+      this.setImageDefault(containerName, localConfig, artifact);
+      return;
+    }
+
+    if (
+      this.isMatchingPrimaryImg(
+        containersLength,
+        artifact.name,
+        artifact.primary
+      )
+    ) {
+      localConfig[
+        containerName
+      ].image = `quay.io/${artifact.image_tag}:release-${this.options
+        .commitId}`;
+    }
+  }
+
+  setImageDefault(containerName, localConfig, artifact) {
+    const artifactBranch =
+      localConfig[containerName].branch || localConfig.branch;
+    if (
+      !this.options.imageResourceDefs[artifact.image_tag] ||
+      !this.options.imageResourceDefs[artifact.image_tag][artifactBranch]
+    ) {
+      this.eventHandler.emitWarn(
+        JSON.stringify(this.options.imageResourceDefs)
+      );
+      throw new Error(
+        `Image ${artifact.image_tag} not found for defined branch (${artifactBranch})`
+      );
+    }
+    localConfig[containerName].image = this.options.imageResourceDefs[
+      artifact.image_tag
+    ][artifactBranch].image;
+  }
+
+  setImage(containersLength, containerName, localConfig, artifact) {
+    const self = this;
+    const tags = {
+      app: "kit_deploymentizer",
+      kit_resource: artifact.name,
+      feature_name: featureImgShaName
+    };
+
+    if (!self.launchDarkly) {
+      const errAsStr = `Launchdarkly client is undefined for ${featureImgShaName}`;
+      self.eventHandler.emitWarn(errAsStr);
+      self.eventHandler.emitMetric({
+        kind: "event",
+        title: "Launchdarkly undefined",
+        text: errAsStr,
+        tags: tags
+      });
+
+      try {
+        self.setImageDefault(containerName, localConfig, artifact);
+        return Promise.resolve("ok");
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+
+    return self.launchDarkly
+      .toggle(featureImgShaName)
+      .then(isEnabled => {
+        self.eventHandler.emitMetric({
+          kind: "increment",
+          name: isEnabled ? "feature.enabled" : "feature.disabled",
+          tags: tags
+        });
+
+        if (isEnabled) {
+          return self.setImageSHA(
+            containersLength,
+            containerName,
+            localConfig,
+            artifact
+          );
+        }
+
+        return self.setImageDefault(containerName, localConfig, artifact);
+      })
+      .catch(err => {
+        const errMsg = err.message ? err.message : err;
+        const errAsStr = `Error setting image for resource ${artifact.name}: ${errMsg}`;
+        self.eventHandler.emitWarn(errAsStr);
+        self.eventHandler.emitMetric({
+          kind: "event",
+          title: "Kitserver - Error setting image",
+          text: errAsStr,
+          tags: tags
+        });
+        throw Error(errMsg);
+      });
   }
 
   /**
