@@ -191,6 +191,7 @@ class Generator {
 	 * @return {{}}							cloned copy of the configuration with resource specific attributes added.
 	 */
   _createLocalConfiguration(config, resourceName, resource) {
+    const self = this;
     return Promise.coroutine(function*() {
       // clone local copy
       let localConfig = _.cloneDeep(config);
@@ -198,14 +199,14 @@ class Generator {
       localConfig.branch = resource.branch || this.options.clusterDef.branch();
       // Add the ResourceName to the config object.
       localConfig.name = resourceName;
-      if (this.options.deployId) {
+      if (self.options.deployId) {
         if (localConfig.deployment) {
-          localConfig.deployment.id = this.options.deployId;
-          localConfig.deployment.fastRollback = this.options.fastRollback;
+          localConfig.deployment.id = self.options.deployId;
+          localConfig.deployment.fastRollback = self.options.fastRollback;
         } else {
           localConfig.deployment = {
-            id: this.options.deployId,
-            fastRollback: this.options.fastRollback
+            id: self.options.deployId,
+            fastRollback: self.options.fastRollback
           };
         }
       }
@@ -223,8 +224,9 @@ class Generator {
         containers.push({ name: resourceName, container: resource });
       }
 
+      const containersLen = containers.length;
       // Process each container
-      for (let i = 0; i < containers.length; i++) {
+      for (let i = 0; i < containersLen; i++) {
         // clone this so we dont affect the definition
         let artifact = _.cloneDeep(containers[i].container);
         let containerName = containers[i].name;
@@ -232,11 +234,11 @@ class Generator {
         artifact.name = artifact.name || resourceName;
         localConfig[containerName] = artifact;
         // If we have a plugin use it to load env and other config values
-        if (this.configPlugin) {
+        if (self.configPlugin) {
           // get Configuration from plugin
-          const envConfig = yield this.configPlugin.fetch(
+          const envConfig = yield self.configPlugin.fetch(
             artifact,
-            this.options.clusterDef
+            self.options.clusterDef
           );
           // merge these in --> At this point, envConfig will overwrite anything in the cluster def.
           localConfig[containerName] = resourceHandler.merge(
@@ -260,17 +262,17 @@ class Generator {
         //	 if not defined skip
         if (!localConfig[containerName].image) {
           if (artifact.image_tag) {
-            yield this.setImage(
-              containers.length,
+            yield self.setImage(
+              containersLen,
               containerName,
               localConfig,
               artifact
             );
           } else {
-            this.eventHandler.emitWarn(
+            self.eventHandler.emitWarn(
               `No image tag found for ${artifact.name}`
             );
-            this.eventHandler.emitMetric({
+            self.eventHandler.emitMetric({
               kind: "event",
               title: "No image tag found",
               text: `No image tag found for resource ${artifact.name}`,
@@ -282,7 +284,7 @@ class Generator {
           }
           // already image tag
         } else {
-          this.eventHandler.emitWarn(
+          self.eventHandler.emitWarn(
             `Image ${localConfig[containerName]
               .image} already defined for ${artifact.name}`
           );
@@ -292,8 +294,8 @@ class Generator {
       // make sure that at least one of the generated container images matches the commit SHA that spawned this
       Generator._verifyImagesForCommitId(
         localConfig,
-        this.options.commitId,
-        this.eventHandler
+        self.options.commitId,
+        self.eventHandler
       );
 
       // if service info, append
@@ -304,19 +306,24 @@ class Generator {
     }).bind(this)();
   }
 
-  isMatchingPrimaryImg(countContainers, resourceName, isPrimary) {
-    if (countContainers === 1) {
+  isMatchingPrimaryImg(containersLen, resourceName, isPrimary) {
+    if (containersLen <= 1) {
+      if (containersLen <= 0) {
+        this.logger.error(
+          `Deploymentizer: resource ${resourceName} has got containers length: ${containersLen}`
+        );
+      }
       return true;
     }
     if (isPrimary === undefined) {
       throw Error(
-        `No primary set for the resource ${resourceName} with containers > 1`
+        `Deploymentizer: no primary set for the resource ${resourceName} with containers > 1`
       );
     }
     return isPrimary;
   }
 
-  setImageSHA(containersLength, containerName, localConfig, artifact) {
+  setImageSHA(containersLen, containerName, localConfig, artifact) {
     if (!this.options.commitId) {
       this.eventHandler.emitWarn(`No SHA passed in for ${artifact.name}`);
       this.eventHandler.emitMetric({
@@ -334,11 +341,7 @@ class Generator {
     }
 
     if (
-      this.isMatchingPrimaryImg(
-        containersLength,
-        artifact.name,
-        artifact.primary
-      )
+      this.isMatchingPrimaryImg(containersLen, artifact.name, artifact.primary)
     ) {
       localConfig[
         containerName
@@ -366,7 +369,7 @@ class Generator {
     ][artifactBranch].image;
   }
 
-  setImage(containersLength, containerName, localConfig, artifact) {
+  setImage(containersLen, containerName, localConfig, artifact) {
     const self = this;
     const tags = {
       app: "kit_deploymentizer",
@@ -403,7 +406,7 @@ class Generator {
 
         if (isEnabled) {
           return self.setImageSHA(
-            containersLength,
+            containersLen,
             containerName,
             localConfig,
             artifact
