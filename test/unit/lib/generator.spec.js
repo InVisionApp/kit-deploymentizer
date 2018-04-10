@@ -355,7 +355,7 @@ describe("Generator", () => {
             resource
           )
           .should.be.rejectedWith(
-            "No primary set for the resource auth-two-containers with containers > 1"
+            "Deploymentizer: no primary set for the resource auth-two-containers with containers > 1"
           );
       });
     });
