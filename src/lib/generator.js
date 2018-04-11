@@ -226,13 +226,14 @@ class Generator {
 
       const containersLen = containers.length;
 
-      // TODO: remove this
+      // TODO: remove this logs
+      self.eventHandler.emitInfo(
+        `setting image SHA: ${resourceName} has containers: ${containersLen}`
+      );
       if (containersLen > 1) {
-        self.eventHandler.emitInfo(
-          `setting image SHA: ${resourceName} has containers: ${containersLen}`
-        );
         self.eventHandler.emitInfo(`containers: ${JSON.stringify(containers)}`);
       }
+
       // Process each container
       for (let i = 0; i < containersLen; i++) {
         // clone this so we dont affect the definition
