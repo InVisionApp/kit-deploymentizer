@@ -225,6 +225,14 @@ class Generator {
       }
 
       const containersLen = containers.length;
+
+      // TODO: remove this
+      if (containersLen > 1) {
+        self.eventHandler.emitInfo(
+          `setting image SHA: ${resourceName} has containers: ${containersLen}`
+        );
+        self.eventHandler.emitInfo(`containers: ${JSON.stringify(containers)}`);
+      }
       // Process each container
       for (let i = 0; i < containersLen; i++) {
         // clone this so we dont affect the definition
@@ -309,7 +317,7 @@ class Generator {
   isMatchingPrimaryImg(containersLen, resourceName, isPrimary) {
     if (containersLen > 1) {
       this.eventHandler.emitInfo(
-        `setting image SHA: ${resourceName} has ${containersLen} > 1 , needs 'primary'(= ${isPrimary}) container`
+        `setting image SHA: ${resourceName} has more than 1 containers: ${containersLen}; needs 'primary'(= ${isPrimary}) container`
       );
 
       if (isPrimary === undefined) {
