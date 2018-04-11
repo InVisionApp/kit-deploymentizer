@@ -225,6 +225,16 @@ class Generator {
       }
 
       const containersLen = containers.length;
+
+      // TODO: remove this after stable
+      if (containersLen > 1) {
+        self.eventHandler.emitWarn(
+          `${resourceName} has ${containersLen} containers : ${JSON.stringify(
+            containers
+          )}`
+        );
+      }
+
       // Process each container
       for (let i = 0; i < containersLen; i++) {
         // clone this so we dont affect the definition
@@ -307,12 +317,7 @@ class Generator {
   }
 
   isMatchingPrimaryImg(containersLen, resourceName, isPrimary) {
-    if (containersLen <= 1) {
-      if (containersLen <= 0) {
-        this.logger.error(
-          `Deploymentizer: resource ${resourceName} has got containers length: ${containersLen}`
-        );
-      }
+    if (containersLen === 1) {
       return true;
     }
     if (isPrimary === undefined) {
