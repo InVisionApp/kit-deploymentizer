@@ -308,7 +308,7 @@ class Generator {
 
   isMatchingPrimaryImg(containersLen, resourceName, isPrimary) {
     if (containersLen > 1) {
-      this.eventHandler.emitWarn(
+      this.eventHandler.emitInfo(
         `setting image SHA: ${resourceName} has ${containersLen} > 1 , needs 'primary'(= ${isPrimary}) container`
       );
 
@@ -320,7 +320,7 @@ class Generator {
       return isPrimary;
     }
 
-    this.eventHandler.emitWarn(
+    this.eventHandler.emitInfo(
       `setting image SHA: ${resourceName} has ${containersLen} == 1 , NO need a 'primary' container`
     );
 
