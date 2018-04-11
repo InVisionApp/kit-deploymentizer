@@ -231,6 +231,9 @@ class Generator {
         `setting image SHA: ${resourceName} has containers: ${containersLen}`
       );
       if (containersLen > 1) {
+        self.eventHandler.emitInfo(
+          `resource containers: ${JSON.stringify(resource.containers)}`
+        );
         self.eventHandler.emitInfo(`containers: ${JSON.stringify(containers)}`);
       }
 
