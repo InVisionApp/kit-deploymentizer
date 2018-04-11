@@ -225,16 +225,6 @@ class Generator {
       }
 
       const containersLen = containers.length;
-
-      // TODO: remove this after stable
-      if (containersLen > 1) {
-        self.eventHandler.emitWarn(
-          `${resourceName} has ${containersLen} containers : ${JSON.stringify(
-            containers
-          )}`
-        );
-      }
-
       // Process each container
       for (let i = 0; i < containersLen; i++) {
         // clone this so we dont affect the definition
@@ -317,15 +307,24 @@ class Generator {
   }
 
   isMatchingPrimaryImg(containersLen, resourceName, isPrimary) {
-    if (containersLen === 1) {
-      return true;
-    }
-    if (isPrimary === undefined) {
-      throw Error(
-        `Deploymentizer: no primary set for the resource ${resourceName} with containers > 1`
+    if (containersLen > 1) {
+      this.eventHandler.emitInfo(
+        `setting image SHA: ${resourceName} has ${containersLen} > 1 , needs 'primary'(= ${isPrimary}) container`
       );
+
+      if (isPrimary === undefined) {
+        throw Error(
+          `Deploymentizer: no primary set for the resource ${resourceName} with containers > 1`
+        );
+      }
+      return isPrimary;
     }
-    return isPrimary;
+
+    this.eventHandler.emitInfo(
+      `setting image SHA: ${resourceName} has ${containersLen} == 1 , NO need a 'primary' container`
+    );
+
+    return true;
   }
 
   setImageSHA(containersLen, containerName, localConfig, artifact) {
