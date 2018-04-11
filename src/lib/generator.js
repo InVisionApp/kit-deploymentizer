@@ -215,10 +215,14 @@ class Generator {
       let containers = [];
       if (resource.containers) {
         Object.keys(resource.containers).forEach(cName => {
-          containers.push({
-            name: cName,
-            container: resource.containers[cName]
-          });
+          // Sometimes it gets the overrides as another container,
+          // this avoids adding them to the final containers list
+          if (cName !== resourceName) {
+            containers.push({
+              name: cName,
+              container: resource.containers[cName]
+            });
+          }
         });
       } else {
         containers.push({ name: resourceName, container: resource });
@@ -231,9 +235,6 @@ class Generator {
         `setting image SHA: ${resourceName} has containers: ${containersLen}`
       );
       if (containersLen > 1) {
-        self.eventHandler.emitInfo(
-          `resource containers: ${JSON.stringify(resource.containers)}`
-        );
         self.eventHandler.emitInfo(`containers: ${JSON.stringify(containers)}`);
       }
 
