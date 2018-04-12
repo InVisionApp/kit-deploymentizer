@@ -245,6 +245,11 @@ class Generator {
       }
 
       const containersLen = containers.length;
+      if (containersLen > 1) {
+        self.eventHandler.emitDebug(
+          `${resourceName} containers content: ${JSON.stringify(containers)}`
+        );
+      }
 
       // Process each container
       for (let i = 0; i < containersLen; i++) {
