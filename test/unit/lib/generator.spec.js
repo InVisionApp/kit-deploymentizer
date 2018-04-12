@@ -360,6 +360,58 @@ describe("Generator", () => {
       });
     });
 
+    it("should throw an error when override container has the same name as the resource", () => {
+      const mockLaunchDarkly = {
+        toggle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(true);
+          });
+        }
+      };
+
+      const serviceName = "auth-two-containers";
+      return YamlHandler.loadClusterDefinitions(
+        "./test/fixture/clusters"
+      ).should.be.fulfilled.then(clusterDefs => {
+        const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
+        const clusterDef = clusterDefs[3];
+
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          undefined,
+          undefined,
+          new EventHandler(),
+          undefined,
+          undefined,
+          sha,
+          mockLaunchDarkly
+        );
+        expect(clusterDef).to.exist;
+
+        // image_tag needed, since we dont preload the base cluster def in this test
+        const resource = clusterDef.cluster.resources[serviceName];
+
+        // adding same container name
+        resource.containers[serviceName] = {
+          image_tag: "invision/" + serviceName
+        };
+
+        return generator
+          ._createLocalConfiguration(
+            clusterDef.configuration(),
+            serviceName,
+            resource
+          )
+          .should.be.rejectedWith(
+            "Deploymentizer: same resource name as a container name, check the cluster test-fixture yaml file"
+          );
+      });
+    });
+
     it("should set the image when primary set for service with 2 containers and commitId is passed in", () => {
       const mockLaunchDarkly = {
         toggle: function(feature) {

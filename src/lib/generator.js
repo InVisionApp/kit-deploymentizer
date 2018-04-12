@@ -11,6 +11,7 @@ const fseMkdirs = Promise.promisify(fse.mkdirs);
 const fseReadFile = Promise.promisify(fse.readFile);
 
 const featureImgShaName = "kit-deploymentizer-78-image-sha";
+const appName = "kit_deploymentizer";
 
 /**
  * Creates the cluster directory if it already does not exist - async operation.
@@ -213,30 +214,37 @@ class Generator {
 
       // Map all containers into an Array
       let containers = [];
+      let hasNameContainerResource = false;
       if (resource.containers) {
         Object.keys(resource.containers).forEach(cName => {
-          // Sometimes it gets the overrides as another container,
-          // this avoids adding them to the final containers list
-          if (cName !== resourceName) {
-            containers.push({
-              name: cName,
-              container: resource.containers[cName]
+          // It gets the overrides(in cluster yaml files) as another container,
+          // this could cause error when checking the main container
+          // for setting the image SHA
+          if (cName === resourceName) {
+            hasNameContainerResource = true;
+            self.eventHandler.emitWarn(
+              `${resourceName} has a container with the same name`
+            );
+            self.eventHandler.emitMetric({
+              kind: "event",
+              title: "Container name same as resource name",
+              text: `${resourceName} has got a container name with the resource name in ${self.options.clusterDef.name()}`,
+              tags: {
+                app: appName,
+                kit_resource: resourceName
+              }
             });
           }
+          containers.push({
+            name: cName,
+            container: resource.containers[cName]
+          });
         });
       } else {
         containers.push({ name: resourceName, container: resource });
       }
 
       const containersLen = containers.length;
-
-      // TODO: remove this logs
-      self.eventHandler.emitInfo(
-        `setting image SHA: ${resourceName} has containers: ${containersLen}`
-      );
-      if (containersLen > 1) {
-        self.eventHandler.emitInfo(`containers: ${JSON.stringify(containers)}`);
-      }
 
       // Process each container
       for (let i = 0; i < containersLen; i++) {
@@ -279,7 +287,8 @@ class Generator {
               containersLen,
               containerName,
               localConfig,
-              artifact
+              artifact,
+              hasNameContainerResource
             );
           } else {
             self.eventHandler.emitWarn(
@@ -290,8 +299,8 @@ class Generator {
               title: "No image tag found",
               text: `No image tag found for resource ${artifact.name}`,
               tags: {
-                app: "kit_deploymentizer",
-                kit_resource: artifact.name
+                app: appName,
+                kit_resource: resourceName
               }
             });
           }
@@ -319,12 +328,13 @@ class Generator {
     }).bind(this)();
   }
 
-  isMatchingPrimaryImg(containersLen, resourceName, isPrimary) {
+  isMatchingPrimaryImg(containersLen, resourceName, isPrimary, isOverride) {
     if (containersLen > 1) {
-      this.eventHandler.emitInfo(
-        `setting image SHA: ${resourceName} has more than 1 containers: ${containersLen}; needs 'primary'(= ${isPrimary}) container`
-      );
-
+      if (isOverride) {
+        throw Error(
+          `Deploymentizer: same resource name as a container name, check the cluster ${this.options.clusterDef.name()} yaml file`
+        );
+      }
       if (isPrimary === undefined) {
         throw Error(
           `Deploymentizer: no primary set for the resource ${resourceName} with containers > 1`
@@ -332,23 +342,18 @@ class Generator {
       }
       return isPrimary;
     }
-
-    this.eventHandler.emitInfo(
-      `setting image SHA: ${resourceName} has ${containersLen} == 1 , NO need a 'primary' container`
-    );
-
     return true;
   }
 
-  setImageSHA(containersLen, containerName, localConfig, artifact) {
+  setImageSHA(containersLen, containerName, localConfig, artifact, isOverride) {
     if (!this.options.commitId) {
       this.eventHandler.emitWarn(`No SHA passed in for ${artifact.name}`);
       this.eventHandler.emitMetric({
         kind: "event",
-        title: "No SHA passed in",
-        text: `No SHA passsed in for resource ${artifact.name}`,
+        title: "No SHA passed in while setting image",
+        text: `Setting Image , no SHA passsed in for resource ${artifact.name}`,
         tags: {
-          app: "kit_deploymentizer",
+          app: appName,
           kit_resource: artifact.name,
           feature_name: featureImgShaName
         }
@@ -358,7 +363,12 @@ class Generator {
     }
 
     if (
-      this.isMatchingPrimaryImg(containersLen, artifact.name, artifact.primary)
+      this.isMatchingPrimaryImg(
+        containersLen,
+        artifact.name,
+        artifact.primary,
+        isOverride
+      )
     ) {
       localConfig[
         containerName
@@ -386,10 +396,10 @@ class Generator {
     ][artifactBranch].image;
   }
 
-  setImage(containersLen, containerName, localConfig, artifact) {
+  setImage(containersLen, containerName, localConfig, artifact, isOverride) {
     const self = this;
     const tags = {
-      app: "kit_deploymentizer",
+      app: appName,
       kit_resource: artifact.name,
       feature_name: featureImgShaName
     };
@@ -426,7 +436,8 @@ class Generator {
             containersLen,
             containerName,
             localConfig,
-            artifact
+            artifact,
+            isOverride
           );
         }
 
@@ -438,7 +449,7 @@ class Generator {
         self.eventHandler.emitWarn(errAsStr);
         self.eventHandler.emitMetric({
           kind: "event",
-          title: "Kitserver - Error setting image",
+          title: "Error setting image",
           text: errAsStr,
           tags: tags
         });
