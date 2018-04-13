@@ -333,9 +333,6 @@ class Generator {
     // main container having overrides -> primary true
     container.primary = true;
   }
-  isOverride(resourceName, containerName) {
-    return resourceName === containerName;
-  }
 
   isMatchingPrimaryImg(containersLen, artifact) {
     if (containersLen > 1) {
