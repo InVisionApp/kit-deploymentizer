@@ -217,7 +217,9 @@ class Generator {
       let hasOverrides = false;
       if (resource.containers) {
         Object.keys(resource.containers).forEach(cName => {
-          hasOverrides = self.isOverride(resourceName, cName);
+          if (self.isOverride(resourceName, cName)) {
+            hasOverrides = true;
+          }
           containers.push({
             name: cName,
             container: resource.containers[cName]
