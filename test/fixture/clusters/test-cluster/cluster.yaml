@@ -18,7 +18,7 @@ resources:
           - name: test
             value: testvalue
   activity:
-    disable: false
+    disable: true
   activity-hpa:
     containers:
       activity-hpa:
