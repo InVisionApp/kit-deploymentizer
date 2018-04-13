@@ -214,13 +214,13 @@ class Generator {
 
       // Map all containers into an Array
       let containers = [];
+      let hasOverrides = false;
       if (resource.containers) {
         Object.keys(resource.containers).forEach(cName => {
-          let cont = resource.containers[cName];
-          cont.skipMatchPrimary = self.isOverrideOrHPA(resourceName, cName);
+          hasOverrides = self.isOverride(resourceName, cName);
           containers.push({
             name: cName,
-            container: cont
+            container: resource.containers[cName]
           });
         });
       } else {
@@ -234,6 +234,14 @@ class Generator {
             containers
           )}`
         );
+        if (hasOverrides) {
+          containers = _.map(containers, c => {
+            if (c.primary === undefined) {
+              c.primary = !self.isOverride(resourceName, c.name);
+            }
+            return c;
+          });
+        }
       }
 
       // Process each container
@@ -321,33 +329,12 @@ class Generator {
     return resourceName.endsWith("-hpa");
   }
 
-  isOverrideOrHPA(resourceName, containerName) {
-    if (this.isHPA(resourceName)) {
-      return true;
-    }
-    if (resourceName !== containerName) {
-      return false;
-    }
-    this.eventHandler.emitWarn(
-      `${resourceName} has a container override with the same name`
-    );
-    this.eventHandler.emitMetric({
-      kind: "event",
-      title: "Container override name with resource name",
-      text: `${resourceName} has got a container override name with the resource name in ${this.options.clusterDef.name()}`,
-      tags: {
-        app: appName,
-        kit_resource: resourceName
-      }
-    });
-    return true;
+  isOverride(resourceName, containerName) {
+    return resourceName === containerName;
   }
 
   isMatchingPrimaryImg(containersLen, artifact) {
     if (containersLen > 1) {
-      if (artifact.skipMatchPrimary) {
-        return false;
-      }
       if (artifact.primary === undefined) {
         throw Error(
           `Deploymentizer: no primary set for the resource ${artifact.name} with containers > 1`

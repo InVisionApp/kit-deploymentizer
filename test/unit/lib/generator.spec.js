@@ -412,7 +412,7 @@ describe("Generator", () => {
         }
       };
 
-      const serviceName = "auth-two-containers";
+      const serviceName = "auth";
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
       ).should.be.fulfilled.then(clusterDefs => {
