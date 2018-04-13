@@ -214,30 +214,13 @@ class Generator {
 
       // Map all containers into an Array
       let containers = [];
-      let hasNameContainerResource = false;
       if (resource.containers) {
         Object.keys(resource.containers).forEach(cName => {
-          // It gets the overrides(in cluster yaml files) as another container,
-          // this could cause error when checking the main container
-          // for setting the image SHA
-          if (cName === resourceName) {
-            hasNameContainerResource = true;
-            self.eventHandler.emitWarn(
-              `${resourceName} has a container with the same name`
-            );
-            self.eventHandler.emitMetric({
-              kind: "event",
-              title: "Container name same as resource name",
-              text: `${resourceName} has got a container name with the resource name in ${self.options.clusterDef.name()}`,
-              tags: {
-                app: appName,
-                kit_resource: resourceName
-              }
-            });
-          }
+          let cont = resource.containers[cName];
+          cont.skipMatchPrimary = self.isOverrideOrHPA(resourceName, cName);
           containers.push({
             name: cName,
-            container: resource.containers[cName]
+            container: cont
           });
         });
       } else {
@@ -247,7 +230,9 @@ class Generator {
       const containersLen = containers.length;
       if (containersLen > 1) {
         self.eventHandler.emitDebug(
-          `${resourceName} containers content: ${JSON.stringify(containers)}`
+          `${resourceName} containers with content: ${JSON.stringify(
+            containers
+          )}`
         );
       }
 
@@ -292,8 +277,7 @@ class Generator {
               containersLen,
               containerName,
               localConfig,
-              artifact,
-              hasNameContainerResource
+              artifact
             );
           } else {
             self.eventHandler.emitWarn(
@@ -333,24 +317,48 @@ class Generator {
     }).bind(this)();
   }
 
-  isMatchingPrimaryImg(containersLen, resourceName, isPrimary, isOverride) {
+  isHPA(resourceName) {
+    return resourceName.endsWith("-hpa");
+  }
+
+  isOverrideOrHPA(resourceName, containerName) {
+    if (this.isHPA(resourceName)) {
+      return true;
+    }
+    if (resourceName !== containerName) {
+      return false;
+    }
+    this.eventHandler.emitWarn(
+      `${resourceName} has a container override with the same name`
+    );
+    this.eventHandler.emitMetric({
+      kind: "event",
+      title: "Container override name with resource name",
+      text: `${resourceName} has got a container override name with the resource name in ${this.options.clusterDef.name()}`,
+      tags: {
+        app: appName,
+        kit_resource: resourceName
+      }
+    });
+    return true;
+  }
+
+  isMatchingPrimaryImg(containersLen, artifact) {
     if (containersLen > 1) {
-      if (isOverride) {
+      if (artifact.skipMatchPrimary) {
+        return false;
+      }
+      if (artifact.primary === undefined) {
         throw Error(
-          `Deploymentizer: same resource name as a container name, check the cluster ${this.options.clusterDef.name()} yaml file`
+          `Deploymentizer: no primary set for the resource ${artifact.name} with containers > 1`
         );
       }
-      if (isPrimary === undefined) {
-        throw Error(
-          `Deploymentizer: no primary set for the resource ${resourceName} with containers > 1`
-        );
-      }
-      return isPrimary;
+      return artifact.primary;
     }
     return true;
   }
 
-  setImageSHA(containersLen, containerName, localConfig, artifact, isOverride) {
+  setImageSHA(containersLen, containerName, localConfig, artifact) {
     if (!this.options.commitId) {
       this.eventHandler.emitWarn(`No SHA passed in for ${artifact.name}`);
       this.eventHandler.emitMetric({
@@ -367,14 +375,7 @@ class Generator {
       return;
     }
 
-    if (
-      this.isMatchingPrimaryImg(
-        containersLen,
-        artifact.name,
-        artifact.primary,
-        isOverride
-      )
-    ) {
+    if (this.isMatchingPrimaryImg(containersLen, artifact)) {
       localConfig[
         containerName
       ].image = `quay.io/${artifact.image_tag}:release-${this.options
@@ -435,7 +436,6 @@ class Generator {
           name: isEnabled ? "feature.enabled" : "feature.disabled",
           tags: tags
         });
-
         if (isEnabled) {
           return self.setImageSHA(
             containersLen,
@@ -445,7 +445,6 @@ class Generator {
             isOverride
           );
         }
-
         return self.setImageDefault(containerName, localConfig, artifact);
       })
       .catch(err => {
