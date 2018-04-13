@@ -236,7 +236,7 @@ class Generator {
         );
       }
 
-      // Process each container
+      let hasImageTag = false;
       for (let i = 0; i < containersLen; i++) {
         // clone this so we dont affect the definition
         let artifact = _.cloneDeep(containers[i].container);
@@ -273,25 +273,13 @@ class Generator {
         //	 if not defined skip
         if (!localConfig[containerName].image) {
           if (artifact.image_tag) {
+            hasImageTag = true;
             yield self.setImage(
               containersLen,
               containerName,
               localConfig,
               artifact
             );
-          } else {
-            self.eventHandler.emitWarn(
-              `No image tag found for ${artifact.name}`
-            );
-            self.eventHandler.emitMetric({
-              kind: "event",
-              title: "No image tag found",
-              text: `No image tag found for resource ${artifact.name}`,
-              tags: {
-                app: appName,
-                kit_resource: resourceName
-              }
-            });
           }
           // already image tag
         } else {
@@ -300,6 +288,19 @@ class Generator {
               .image} already defined for ${artifact.name}`
           );
         }
+      }
+
+      if (!hasImageTag) {
+        self.eventHandler.emitWarn(`No image tag found for ${resourceName}`);
+        self.eventHandler.emitMetric({
+          kind: "event",
+          title: "No image tag found",
+          text: `No image tag found for resource ${resourceName}`,
+          tags: {
+            app: appName,
+            kit_resource: resourceName
+          }
+        });
       }
 
       // make sure that at least one of the generated container images matches the commit SHA that spawned this
