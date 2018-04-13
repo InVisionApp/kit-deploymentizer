@@ -397,7 +397,7 @@ class Generator {
     ][artifactBranch].image;
   }
 
-  setImage(containersLen, containerName, localConfig, artifact, isOverride) {
+  setImage(containersLen, containerName, localConfig, artifact) {
     const self = this;
     const tags = {
       app: appName,
@@ -436,8 +436,7 @@ class Generator {
             containersLen,
             containerName,
             localConfig,
-            artifact,
-            isOverride
+            artifact
           );
         }
         return self.setImageDefault(containerName, localConfig, artifact);
