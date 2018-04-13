@@ -234,6 +234,7 @@ class Generator {
             containers
           )}`
         );
+
         if (hasOverrides) {
           containers = _.map(containers, c => {
             if (c.primary === undefined) {
@@ -241,6 +242,11 @@ class Generator {
             }
             return c;
           });
+          self.eventHandler.emitDebug(
+            `${resourceName} containers overrides edited: ${JSON.stringify(
+              containers
+            )}`
+          );
         }
       }
 
