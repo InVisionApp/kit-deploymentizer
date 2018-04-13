@@ -214,15 +214,13 @@ class Generator {
 
       // Map all containers into an Array
       let containers = [];
-      let hasOverrides = false;
       if (resource.containers) {
         Object.keys(resource.containers).forEach(cName => {
-          if (self.isOverride(resourceName, cName)) {
-            hasOverrides = true;
-          }
+          let c = resource.containers[cName];
+          self.setPrimaryInCaseOverride(c);
           containers.push({
             name: cName,
-            container: resource.containers[cName]
+            container: c
           });
         });
       } else {
@@ -236,20 +234,6 @@ class Generator {
             containers
           )}`
         );
-
-        if (hasOverrides) {
-          containers = _.map(containers, c => {
-            if (c.primary === undefined) {
-              c.primary = !self.isOverride(resourceName, c.name);
-            }
-            return c;
-          });
-          self.eventHandler.emitDebug(
-            `${resourceName} containers overrides edited: ${JSON.stringify(
-              containers
-            )}`
-          );
-        }
       }
 
       // Process each container
@@ -337,6 +321,18 @@ class Generator {
     return resourceName.endsWith("-hpa");
   }
 
+  setPrimaryInCaseOverride(container) {
+    if (container.primary !== undefined) return;
+
+    // override -> primary false
+    if (container.image_tag === undefined) {
+      container.primary = false;
+      return;
+    }
+
+    // main container having overrides -> primary true
+    container.primary = true;
+  }
   isOverride(resourceName, containerName) {
     return resourceName === containerName;
   }
