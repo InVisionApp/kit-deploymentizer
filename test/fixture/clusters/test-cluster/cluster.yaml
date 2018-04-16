@@ -19,6 +19,12 @@ resources:
             value: testvalue
   activity:
     disable: true
+  activity-hpa:
+    containers:
+      activity-hpa:
+        maxReplicas: 6
+        minReplicas: 3
+    disable: false
   auth-two-containers:
     branch: develop
     svc:

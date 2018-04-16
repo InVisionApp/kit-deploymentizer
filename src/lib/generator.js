@@ -11,6 +11,7 @@ const fseMkdirs = Promise.promisify(fse.mkdirs);
 const fseReadFile = Promise.promisify(fse.readFile);
 
 const featureImgShaName = "kit-deploymentizer-78-image-sha";
+const appName = "kit_deploymentizer";
 
 /**
  * Creates the cluster directory if it already does not exist - async operation.
@@ -215,9 +216,11 @@ class Generator {
       let containers = [];
       if (resource.containers) {
         Object.keys(resource.containers).forEach(cName => {
+          let c = resource.containers[cName];
+          self.setPrimaryInCaseOverride(c);
           containers.push({
             name: cName,
-            container: resource.containers[cName]
+            container: c
           });
         });
       } else {
@@ -225,7 +228,15 @@ class Generator {
       }
 
       const containersLen = containers.length;
-      // Process each container
+      if (containersLen > 1) {
+        self.eventHandler.emitDebug(
+          `${resourceName} containers with content: ${JSON.stringify(
+            containers
+          )}`
+        );
+      }
+
+      let hasImageTag = false;
       for (let i = 0; i < containersLen; i++) {
         // clone this so we dont affect the definition
         let artifact = _.cloneDeep(containers[i].container);
@@ -262,25 +273,13 @@ class Generator {
         //	 if not defined skip
         if (!localConfig[containerName].image) {
           if (artifact.image_tag) {
+            hasImageTag = true;
             yield self.setImage(
               containersLen,
               containerName,
               localConfig,
               artifact
             );
-          } else {
-            self.eventHandler.emitWarn(
-              `No image tag found for ${artifact.name}`
-            );
-            self.eventHandler.emitMetric({
-              kind: "event",
-              title: "No image tag found",
-              text: `No image tag found for resource ${artifact.name}`,
-              tags: {
-                app: "kit_deploymentizer",
-                kit_resource: artifact.name
-              }
-            });
           }
           // already image tag
         } else {
@@ -289,6 +288,19 @@ class Generator {
               .image} already defined for ${artifact.name}`
           );
         }
+      }
+
+      if (!hasImageTag) {
+        self.eventHandler.emitWarn(`No image tag found for ${resourceName}`);
+        self.eventHandler.emitMetric({
+          kind: "event",
+          title: "No image tag found",
+          text: `No image tag found for resource ${resourceName}`,
+          tags: {
+            app: appName,
+            kit_resource: resourceName
+          }
+        });
       }
 
       // make sure that at least one of the generated container images matches the commit SHA that spawned this
@@ -306,24 +318,32 @@ class Generator {
     }).bind(this)();
   }
 
-  isMatchingPrimaryImg(containersLen, resourceName, isPrimary) {
-    if (containersLen > 1) {
-      this.eventHandler.emitInfo(
-        `setting image SHA: ${resourceName} has ${containersLen} > 1 , needs 'primary'(= ${isPrimary}) container`
-      );
+  isHPA(resourceName) {
+    return resourceName.endsWith("-hpa");
+  }
 
-      if (isPrimary === undefined) {
-        throw Error(
-          `Deploymentizer: no primary set for the resource ${resourceName} with containers > 1`
-        );
-      }
-      return isPrimary;
+  setPrimaryInCaseOverride(container) {
+    if (container.primary !== undefined) return;
+
+    // override -> primary false
+    if (container.image_tag === undefined) {
+      container.primary = false;
+      return;
     }
 
-    this.eventHandler.emitInfo(
-      `setting image SHA: ${resourceName} has ${containersLen} == 1 , NO need a 'primary' container`
-    );
+    // main container having overrides -> primary true
+    container.primary = true;
+  }
 
+  isMatchingPrimaryImg(containersLen, artifact) {
+    if (containersLen > 1) {
+      if (artifact.primary === undefined) {
+        throw Error(
+          `Deploymentizer: no primary set for the resource ${artifact.name} with containers > 1`
+        );
+      }
+      return artifact.primary;
+    }
     return true;
   }
 
@@ -332,10 +352,10 @@ class Generator {
       this.eventHandler.emitWarn(`No SHA passed in for ${artifact.name}`);
       this.eventHandler.emitMetric({
         kind: "event",
-        title: "No SHA passed in",
-        text: `No SHA passsed in for resource ${artifact.name}`,
+        title: "No SHA passed in while setting image",
+        text: `Setting Image , no SHA passsed in for resource ${artifact.name}`,
         tags: {
-          app: "kit_deploymentizer",
+          app: appName,
           kit_resource: artifact.name,
           feature_name: featureImgShaName
         }
@@ -344,9 +364,7 @@ class Generator {
       return;
     }
 
-    if (
-      this.isMatchingPrimaryImg(containersLen, artifact.name, artifact.primary)
-    ) {
+    if (this.isMatchingPrimaryImg(containersLen, artifact)) {
       localConfig[
         containerName
       ].image = `quay.io/${artifact.image_tag}:release-${this.options
@@ -376,7 +394,7 @@ class Generator {
   setImage(containersLen, containerName, localConfig, artifact) {
     const self = this;
     const tags = {
-      app: "kit_deploymentizer",
+      app: appName,
       kit_resource: artifact.name,
       feature_name: featureImgShaName
     };
@@ -407,7 +425,6 @@ class Generator {
           name: isEnabled ? "feature.enabled" : "feature.disabled",
           tags: tags
         });
-
         if (isEnabled) {
           return self.setImageSHA(
             containersLen,
@@ -416,7 +433,6 @@ class Generator {
             artifact
           );
         }
-
         return self.setImageDefault(containerName, localConfig, artifact);
       })
       .catch(err => {
@@ -425,7 +441,7 @@ class Generator {
         self.eventHandler.emitWarn(errAsStr);
         self.eventHandler.emitMetric({
           kind: "event",
-          title: "Kitserver - Error setting image",
+          title: "Error setting image",
           text: errAsStr,
           tags: tags
         });

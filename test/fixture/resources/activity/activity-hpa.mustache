@@ -1,0 +1,15 @@
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: activity
+  labels:
+    app: invisionapp
+    deployer: kit
+spec:
+  scaleTargetRef:
+    apiVersion: extensions/v1beta1
+    kind: Deployment
+    name: activity
+  minReplicas: {{{activity-hpa.minReplicas}}}
+  maxReplicas: {{{activity-hpa.maxReplicas}}}
+  targetCPUUtilizationPercentage: {{{activity-hpa.targetCPUUtilizationPercentage}}}
