@@ -214,7 +214,13 @@ class Generator {
 
       // Map all containers into an Array
       let containers = [];
+
       if (resource.containers) {
+        self.eventHandler.emitDebug(
+          `${resourceName} containers received: ${JSON.stringify(
+            resource.containers
+          )}`
+        );
         Object.keys(resource.containers).forEach(cName => {
           let c = resource.containers[cName];
           self.setPrimaryInCaseOverride(c);
@@ -227,13 +233,13 @@ class Generator {
         containers.push({ name: resourceName, container: resource });
       }
 
+      self.eventHandler.emitDebug(
+        `${resourceName} containers edited: ${JSON.stringify(containers)}`
+      );
+
       const containersLen = containers.length;
       if (containersLen > 1) {
-        self.eventHandler.emitDebug(
-          `${resourceName} containers with content: ${JSON.stringify(
-            containers
-          )}`
-        );
+        self.checkingPrimary(containers, resourceName);
       }
 
       let hasImageTag = false;
@@ -318,21 +324,38 @@ class Generator {
     }).bind(this)();
   }
 
-  isHPA(resourceName) {
-    return resourceName.endsWith("-hpa");
-  }
-
   setPrimaryInCaseOverride(container) {
-    if (container.primary !== undefined) return;
+    if (_.has(container, "primary")) return;
 
-    // override -> primary false
-    if (container.image_tag === undefined) {
+    if (!_.has(container, "image_tag")) {
       container.primary = false;
       return;
     }
 
-    // main container having overrides -> primary true
     container.primary = true;
+  }
+
+  checkingPrimary(containers, resourceName) {
+    const mainLen = _.filter(containers, ["container.primary", true]).length;
+    let errStr = "";
+    if (mainLen > 1) {
+      errStr = `Checking primary: More than one main container for ${resourceName}`;
+    }
+    if (mainLen === 0) {
+      errStr = `Checking primary: No main container for ${resourceName}`;
+    }
+    if (errStr !== "") {
+      this.eventHandler.emitMetric({
+        kind: "event",
+        title: "Main container error",
+        text: errStr,
+        tags: {
+          app: appName,
+          kit_resource: resourceName
+        }
+      });
+      throw Error(errStr);
+    }
   }
 
   isMatchingPrimaryImg(containersLen, artifact) {
@@ -364,11 +387,15 @@ class Generator {
       return;
     }
 
+    // set Image with commitID for primary containers
     if (this.isMatchingPrimaryImg(containersLen, artifact)) {
       localConfig[
         containerName
       ].image = `quay.io/${artifact.image_tag}:release-${this.options
         .commitId}`;
+    } else {
+      // set default Img for non-primary containers
+      this.setImageDefault(containerName, localConfig, artifact);
     }
   }
 

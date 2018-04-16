@@ -388,6 +388,9 @@ describe("Generator", () => {
 
         const resource = clusterDef.cluster.resources[serviceName];
 
+        const main = resource.containers[serviceName + "-con"];
+        main.image_tag = "invision/" + serviceName;
+
         // adding same container name - override
         resource.containers[serviceName] = {
           replicaCount: "2"
@@ -406,12 +409,179 @@ describe("Generator", () => {
       });
     });
 
+    it("should throw an error when 2 main containers with image_tag", () => {
+      const mockLaunchDarkly = {
+        toggle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(true);
+          });
+        }
+      };
+
+      const serviceName = "auth";
+      return YamlHandler.loadClusterDefinitions(
+        "./test/fixture/clusters"
+      ).should.be.fulfilled.then(clusterDefs => {
+        const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
+        const clusterDef = clusterDefs[3];
+
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          undefined,
+          undefined,
+          new EventHandler(),
+          undefined,
+          undefined,
+          sha,
+          mockLaunchDarkly
+        );
+        expect(clusterDef).to.exist;
+
+        const resource = clusterDef.cluster.resources[serviceName];
+
+        const main = resource.containers[serviceName + "-con"];
+        main.image_tag = "invision/" + serviceName;
+
+        // adding same container name - override
+        resource.containers[serviceName] = {
+          replicaCount: "2",
+          image_tag: "anotherImag"
+        };
+
+        return generator
+          ._createLocalConfiguration(
+            clusterDef.configuration(),
+            serviceName,
+            resource
+          )
+          .should.be.rejectedWith(
+            "Checking primary: More than one main container for auth"
+          );
+      });
+    });
+
+    it("should throw an error when 2 main containers with primary true", () => {
+      const mockLaunchDarkly = {
+        toggle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(true);
+          });
+        }
+      };
+
+      const serviceName = "auth";
+      return YamlHandler.loadClusterDefinitions(
+        "./test/fixture/clusters"
+      ).should.be.fulfilled.then(clusterDefs => {
+        const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
+        const clusterDef = clusterDefs[3];
+
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          undefined,
+          undefined,
+          new EventHandler(),
+          undefined,
+          undefined,
+          sha,
+          mockLaunchDarkly
+        );
+        expect(clusterDef).to.exist;
+
+        const resource = clusterDef.cluster.resources[serviceName];
+
+        const main = resource.containers[serviceName + "-con"];
+        main.primary = true;
+
+        // adding same container name - override
+        resource.containers[serviceName] = {
+          replicaCount: "2",
+          primary: true
+        };
+
+        return generator
+          ._createLocalConfiguration(
+            clusterDef.configuration(),
+            serviceName,
+            resource
+          )
+          .should.be.rejectedWith(
+            "Checking primary: More than one main container for auth"
+          );
+      });
+    });
+
+    it("should throw an error when no main container", () => {
+      const mockLaunchDarkly = {
+        toggle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(true);
+          });
+        }
+      };
+
+      const serviceName = "auth";
+      return YamlHandler.loadClusterDefinitions(
+        "./test/fixture/clusters"
+      ).should.be.fulfilled.then(clusterDefs => {
+        const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
+        const clusterDef = clusterDefs[3];
+
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          undefined,
+          undefined,
+          new EventHandler(),
+          undefined,
+          undefined,
+          sha,
+          mockLaunchDarkly
+        );
+        expect(clusterDef).to.exist;
+
+        const resource = clusterDef.cluster.resources[serviceName];
+
+        // adding same container name - override
+        resource.containers[serviceName] = {
+          replicaCount: "2"
+        };
+
+        return generator
+          ._createLocalConfiguration(
+            clusterDef.configuration(),
+            serviceName,
+            resource
+          )
+          .should.be.rejectedWith(
+            "Checking primary: No main container for auth"
+          );
+      });
+    });
+
     it("should set the image when primary set for service with 2 containers and commitId is passed in", () => {
       const mockLaunchDarkly = {
         toggle: function(feature) {
           return new Promise((resolve, reject) => {
             return resolve(true);
           });
+        }
+      };
+
+      const imgDefaultResources = {
+        "invision/auth-two-containers-datadog": {
+          develop: { image: "develop-sha" }
         }
       };
 
@@ -424,7 +594,7 @@ describe("Generator", () => {
 
         const generator = new Generator(
           clusterDef,
-          imageResources,
+          imgDefaultResources,
           "./test/fixture/resources",
           os.tmpdir(),
           true,
