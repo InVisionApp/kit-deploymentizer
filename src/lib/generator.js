@@ -364,11 +364,15 @@ class Generator {
       return;
     }
 
+    // set Image with commitID for primary containers
     if (this.isMatchingPrimaryImg(containersLen, artifact)) {
       localConfig[
         containerName
       ].image = `quay.io/${artifact.image_tag}:release-${this.options
         .commitId}`;
+    } else {
+      // set default Img for non-primary containers
+      this.setImageDefault(containerName, localConfig, artifact);
     }
   }
 

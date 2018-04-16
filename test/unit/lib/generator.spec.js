@@ -415,6 +415,12 @@ describe("Generator", () => {
         }
       };
 
+      const imgDefaultResources = {
+        "invision/auth-two-containers-datadog": {
+          develop: { image: "develop-sha" }
+        }
+      };
+
       const serviceName = "auth-two-containers";
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
@@ -424,7 +430,7 @@ describe("Generator", () => {
 
         const generator = new Generator(
           clusterDef,
-          imageResources,
+          imgDefaultResources,
           "./test/fixture/resources",
           os.tmpdir(),
           true,
