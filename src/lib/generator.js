@@ -214,7 +214,13 @@ class Generator {
 
       // Map all containers into an Array
       let containers = [];
+
       if (resource.containers) {
+        self.eventHandler.emitDebug(
+          `${resourceName} containers received: ${JSON.stringify(
+            resource.containers
+          )}`
+        );
         Object.keys(resource.containers).forEach(cName => {
           let c = resource.containers[cName];
           self.setPrimaryInCaseOverride(c);
@@ -226,6 +232,10 @@ class Generator {
       } else {
         containers.push({ name: resourceName, container: resource });
       }
+
+      self.eventHandler.emitDebug(
+        `${resourceName} containers edited: ${JSON.stringify(containers)}`
+      );
 
       const containersLen = containers.length;
       if (containersLen > 1) {
@@ -315,10 +325,8 @@ class Generator {
   }
 
   setPrimaryInCaseOverride(container) {
-    // checking 2 containers - primary already defined
     if (_.has(container, "primary")) return;
 
-    // override w/o image_tag -> primary false
     if (!_.has(container, "image_tag")) {
       container.primary = false;
       return;
@@ -328,10 +336,6 @@ class Generator {
   }
 
   checkingPrimary(containers, resourceName) {
-    const self = this;
-    self.eventHandler.emitDebug(
-      `${resourceName} containers with content: ${JSON.stringify(containers)}`
-    );
     const mainLen = _.filter(containers, ["container.primary", true]).length;
     let errStr = "";
     if (mainLen > 1) {
@@ -341,7 +345,7 @@ class Generator {
       errStr = `No main container as 'primary: true' for ${resourceName}`;
     }
     if (errStr !== "") {
-      self.eventHandler.emitMetric({
+      this.eventHandler.emitMetric({
         kind: "event",
         title: "Main container error",
         text: errStr,
