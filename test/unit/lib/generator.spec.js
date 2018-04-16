@@ -311,7 +311,50 @@ describe("Generator", () => {
       });
     });
 
-    it("should throw an error when no primary set for service with 2 containers and commitId is passed in", () => {
+    it("should skip the image set for HPA", () => {
+      const mockLaunchDarkly = {
+        toggle: function(feature) {
+          return new Promise((resolve, reject) => {
+            return resolve(true);
+          });
+        }
+      };
+      const name = "activity-hpa";
+
+      return YamlHandler.loadClusterDefinitions(
+        "./test/fixture/clusters"
+      ).should.be.fulfilled.then(clusterDefs => {
+        const sha = "3154cf1fff0c547c9628c266f6c013b53228fdc8";
+        const clusterDef = clusterDefs[3];
+        const generator = new Generator(
+          clusterDef,
+          imageResources,
+          "./test/fixture/resources",
+          os.tmpdir(),
+          true,
+          undefined,
+          undefined,
+          new EventHandler(),
+          undefined,
+          undefined,
+          sha,
+          mockLaunchDarkly
+        );
+        expect(clusterDef).to.exist;
+
+        const resource = clusterDef.cluster.resources[name];
+
+        return generator
+          ._createLocalConfiguration(clusterDef.configuration(), name, resource)
+          .should.be.fulfilled.then(localConfig => {
+            expect(localConfig).to.exist;
+            expect(localConfig[name]).to.exist;
+            expect(localConfig.name).to.equal(name);
+          });
+      });
+    });
+
+    it("should skip matching primary the override when containers > 1 and same name as the resource", () => {
       const mockLaunchDarkly = {
         toggle: function(feature) {
           return new Promise((resolve, reject) => {
@@ -320,7 +363,7 @@ describe("Generator", () => {
         }
       };
 
-      const serviceName = "auth-two-containers";
+      const serviceName = "auth";
       return YamlHandler.loadClusterDefinitions(
         "./test/fixture/clusters"
       ).should.be.fulfilled.then(clusterDefs => {
@@ -343,10 +386,12 @@ describe("Generator", () => {
         );
         expect(clusterDef).to.exist;
 
-        // image_tag needed, since we dont preload the base cluster def in this test
         const resource = clusterDef.cluster.resources[serviceName];
-        resource.containers[serviceName + "-con"].image_tag =
-          "invision/" + serviceName;
+
+        // adding same container name - override
+        resource.containers[serviceName] = {
+          replicaCount: "2"
+        };
 
         return generator
           ._createLocalConfiguration(
@@ -354,9 +399,10 @@ describe("Generator", () => {
             serviceName,
             resource
           )
-          .should.be.rejectedWith(
-            "Deploymentizer: no primary set for the resource auth-two-containers with containers > 1"
-          );
+          .should.be.fulfilled.then(localConfig => {
+            expect(localConfig).to.exist;
+            expect(localConfig.svc).to.exist;
+          });
       });
     });
 

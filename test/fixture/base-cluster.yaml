@@ -21,7 +21,6 @@ resources:
         env:
           - name: test
             value: testbase
-
   auth-two-containers:
     containers:
       auth-two-containers-con:
@@ -44,7 +43,6 @@ resources:
       labels:
         - name: "app"
           value: "invisionapp"
-
   activity:
     kind: deployment
     file: ./activity/activity-deployment.mustache
@@ -69,3 +67,12 @@ resources:
         external: true
       - name: GITHUB_TOKEN
         external: true
+  activity-hpa:
+    kind: deployment
+    file: ./activity/activity-hpa.mustache
+    containers:
+      activity-hpa:
+        maxReplicas: 6
+        minReplicas: 3
+        targetCPUUtilizationPercentage: 120
+        primary: true
