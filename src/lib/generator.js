@@ -339,10 +339,10 @@ class Generator {
     const mainLen = _.filter(containers, ["container.primary", true]).length;
     let errStr = "";
     if (mainLen > 1) {
-      errStr = `More than one main container with 'primary: true' for ${resourceName}`;
+      errStr = `Checking primary: More than one main container for ${resourceName}`;
     }
     if (mainLen === 0) {
-      errStr = `No main container as 'primary: true' for ${resourceName}`;
+      errStr = `Checking primary: No main container for ${resourceName}`;
     }
     if (errStr !== "") {
       this.eventHandler.emitMetric({

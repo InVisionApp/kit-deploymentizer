@@ -459,7 +459,7 @@ describe("Generator", () => {
             resource
           )
           .should.be.rejectedWith(
-            "More than one main container with 'primary: true' for auth"
+            "Checking primary: More than one main container for auth"
           );
       });
     });
@@ -514,7 +514,7 @@ describe("Generator", () => {
             resource
           )
           .should.be.rejectedWith(
-            "More than one main container with 'primary: true' for auth"
+            "Checking primary: More than one main container for auth"
           );
       });
     });
@@ -565,7 +565,7 @@ describe("Generator", () => {
             resource
           )
           .should.be.rejectedWith(
-            "No main container as 'primary: true' for auth"
+            "Checking primary: No main container for auth"
           );
       });
     });
