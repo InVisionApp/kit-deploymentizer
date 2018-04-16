@@ -229,11 +229,7 @@ class Generator {
 
       const containersLen = containers.length;
       if (containersLen > 1) {
-        self.eventHandler.emitDebug(
-          `${resourceName} containers with content: ${JSON.stringify(
-            containers
-          )}`
-        );
+        self.checkingPrimary(containers, resourceName);
       }
 
       let hasImageTag = false;
@@ -318,21 +314,44 @@ class Generator {
     }).bind(this)();
   }
 
-  isHPA(resourceName) {
-    return resourceName.endsWith("-hpa");
-  }
-
   setPrimaryInCaseOverride(container) {
-    if (container.primary !== undefined) return;
+    // checking 2 containers - primary already defined
+    if (_.has(container, "primary")) return;
 
-    // override -> primary false
-    if (container.image_tag === undefined) {
+    // override w/o image_tag -> primary false
+    if (!_.has(container, "image_tag")) {
       container.primary = false;
       return;
     }
 
-    // main container having overrides -> primary true
     container.primary = true;
+  }
+
+  checkingPrimary(containers, resourceName) {
+    const self = this;
+    self.eventHandler.emitDebug(
+      `${resourceName} containers with content: ${JSON.stringify(containers)}`
+    );
+    const mainLen = _.filter(containers, ["container.primary", true]).length;
+    let errStr = "";
+    if (mainLen > 1) {
+      errStr = `More than one main container with 'primary: true' for ${resourceName}`;
+    }
+    if (mainLen === 0) {
+      errStr = `No main container as 'primary: true' for ${resourceName}`;
+    }
+    if (errStr !== "") {
+      self.eventHandler.emitMetric({
+        kind: "event",
+        title: "Main container error",
+        text: errStr,
+        tags: {
+          app: appName,
+          kit_resource: resourceName
+        }
+      });
+      throw Error(errStr);
+    }
   }
 
   isMatchingPrimaryImg(containersLen, artifact) {

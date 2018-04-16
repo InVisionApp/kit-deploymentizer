@@ -388,6 +388,9 @@ describe("Generator", () => {
 
         const resource = clusterDef.cluster.resources[serviceName];
 
+        const main = resource.containers[serviceName + "-con"];
+        main.image_tag = "invision/" + serviceName;
+
         // adding same container name - override
         resource.containers[serviceName] = {
           replicaCount: "2"
