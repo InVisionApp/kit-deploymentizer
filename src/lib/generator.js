@@ -216,11 +216,6 @@ class Generator {
       let containers = [];
 
       if (resource.containers) {
-        self.eventHandler.emitDebug(
-          `${resourceName} containers received: ${JSON.stringify(
-            resource.containers
-          )}`
-        );
         Object.keys(resource.containers).forEach(cName => {
           let c = resource.containers[cName];
           self.setPrimaryInCaseOverride(c);
@@ -232,10 +227,6 @@ class Generator {
       } else {
         containers.push({ name: resourceName, container: resource });
       }
-
-      self.eventHandler.emitDebug(
-        `${resourceName} containers edited: ${JSON.stringify(containers)}`
-      );
 
       const containersLen = containers.length;
       if (containersLen > 1) {
