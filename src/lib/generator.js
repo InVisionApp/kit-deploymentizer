@@ -218,7 +218,9 @@ class Generator {
       if (resource.containers) {
         Object.keys(resource.containers).forEach(cName => {
           let c = resource.containers[cName];
-          self.setPrimaryInCaseOverride(c);
+          if (!self.isHPA(resourceName)) {
+            self.setPrimary(c);
+          }
           containers.push({
             name: cName,
             container: c
@@ -287,7 +289,7 @@ class Generator {
         }
       }
 
-      if (!hasImageTag) {
+      if (!hasImageTag && !self.isHPA(resourceName)) {
         self.eventHandler.emitWarn(`No image tag found for ${resourceName}`);
         self.eventHandler.emitMetric({
           kind: "event",
@@ -315,7 +317,7 @@ class Generator {
     }).bind(this)();
   }
 
-  setPrimaryInCaseOverride(container) {
+  setPrimary(container) {
     if (_.has(container, "primary")) return;
 
     if (!_.has(container, "image_tag")) {
@@ -326,7 +328,13 @@ class Generator {
     container.primary = true;
   }
 
+  isHPA(resourceName) {
+    return resourceName.endsWith("-hpa");
+  }
+
   checkingPrimary(containers, resourceName) {
+    if (this.isHPA(resourceName)) return;
+
     const mainLen = _.filter(containers, ["container.primary", true]).length;
     let errStr = "";
     if (mainLen > 1) {
