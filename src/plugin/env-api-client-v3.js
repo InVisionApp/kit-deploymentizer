@@ -189,8 +189,14 @@ class EnvApiClient {
                   tags: tags
                 });
                 if (isEnabled) {
+                  logger.debug(
+                    "enabled kit-deploymentizer-90-fail-deploy-envs: rejecting deployment..."
+                  );
                   throw resultErr;
                 }
+                logger.debug(
+                  "disabled kit-deploymentizer-90-fail-deploy-envs: continue deployment..."
+                );
                 return resultOK;
               });
           }
