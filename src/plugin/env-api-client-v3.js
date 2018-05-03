@@ -128,7 +128,8 @@ class EnvApiClient {
         envapi_environment: params.environment,
         envapi_cluster: params.cluster,
         envapi_resource: params.service,
-        envapi_version: "v3"
+        envapi_version: "v3",
+        kit_resource: params.service
       };
 
       return self
