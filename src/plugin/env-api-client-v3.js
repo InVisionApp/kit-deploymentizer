@@ -179,9 +179,9 @@ class EnvApiClient {
             }
 
             return self.launchDarkly
-              .toggle("feature-name-to-be-set")
+              .toggle("kit-deploymentizer-90-fail-deploy-envs")
               .then(isEnabled => {
-                tags.feature_name = "feature-name-to-be-set";
+                tags.feature_name = "kit-deploymentizer-90-fail-deploy-envs";
                 self.eventHandler.emitMetric({
                   kind: "increment",
                   name: isEnabled ? "feature.enabled" : "feature.disabled",
