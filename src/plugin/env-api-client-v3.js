@@ -182,7 +182,7 @@ class EnvApiClient {
               .toggle("kit-deploymentizer-90-fail-deploy-envs")
               .then(isEnabled => {
                 tags.feature_name = "kit-deploymentizer-90-fail-deploy-envs";
-                self.eventHandler.emitMetric({
+                self.events.emitMetric({
                   kind: "increment",
                   name: isEnabled ? "feature.enabled" : "feature.disabled",
                   tags: tags
