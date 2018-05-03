@@ -38,6 +38,7 @@ class EnvApiClient {
       this.supportFallback = true;
     }
     this.events = options.events || undefined;
+    this.launchDarkly = options.launchDarkly || undefined;
   }
 
   /**
@@ -78,6 +79,7 @@ class EnvApiClient {
 	 * 	cluster-not-found: 500
 	 *  file not found: 404
 	 *  secret value: 500
+	 *  partial content: 206 => services compatibility
 	 *
 	 *
 	 * @param  {[type]} service     Resource to get envs for  -- checks for correct annotation
@@ -85,7 +87,7 @@ class EnvApiClient {
 	 * @return {[type]}             envs and configuration information
 	 */
   fetch(service, cluster) {
-    const _self = this;
+    const self = this;
     return Promise.coroutine(function*() {
       if (
         !service.annotations ||
@@ -129,36 +131,83 @@ class EnvApiClient {
         envapi_version: "v3"
       };
 
-      return this.callv3Api(params)
-        .then(res => {
-          if (res.status && res.status === "success") {
-            let result = {};
-            result = this.convertEnvResult(res.values, result);
-            if (_self.events) {
-              _self.events.emitMetric({
-                kind: "increment",
-                name: "envapi.call",
+      return self
+        .callv3Api(params)
+        .then(resp => {
+          if (self.events) {
+            self.events.emitMetric({
+              kind: "increment",
+              name: "envapi.call",
+              tags: tags
+            });
+          }
+
+          const body = resp.body;
+          const resultOK = {
+            env: self.convertEnvResult(body.values)
+          };
+
+          const resultErr = new Error({
+            message: body.message || "No error message supplied",
+            statusCode: resp.statusCode
+          });
+
+          if (resp.statusCode === 200) {
+            return resultOK;
+          }
+
+          if (resp.statusCode === 206) {
+            if (self.events) {
+              self.events.emitMetric({
+                kind: "event",
+                title: "Partial Content",
+                text: "Success with partial content: " + body.errors,
                 tags: tags
               });
             }
-            return result;
-          } else {
-            const errStr = res.message || "No error message supplied";
-            throw new Error(errStr);
+
+            if (!self.launchDarkly) {
+              if (self.events) {
+                self.events.emitMetric({
+                  kind: "event",
+                  title: "LaunchDarkly undefined",
+                  text: "Launchdarkly is undefined",
+                  tags: tags
+                });
+              }
+              return resultOK;
+            }
+
+            return self.launchDarkly
+              .toggle("feature-name-to-be-set")
+              .then(isEnabled => {
+                tags.feature_name = "feature-name-to-be-set";
+                self.eventHandler.emitMetric({
+                  kind: "increment",
+                  name: isEnabled ? "feature.enabled" : "feature.disabled",
+                  tags: tags
+                });
+                if (isEnabled) {
+                  throw resultErr;
+                }
+                return resultOK;
+              });
           }
+
+          throw resultErr;
         })
         .catch(err => {
           // try v1 of API if supported and we receieved a 404 from v3 endpoint
-          if (this.supportFallback && err.statusCode && err.statusCode == 404) {
+          if (self.supportFallback && err.statusCode && err.statusCode == 404) {
             logger.warn(
-              `Trying Fallback method with params ${this
-                .defaultBranch}, ${service}, ${params.cluster}`
+              `Trying Fallback method with params ${self.defaultBranch}, ${service}, ${params.cluster}`
             );
-            return this.callv1Api(this.defaultBranch, service, params.cluster)
+            return self
+              .callv1Api(self.defaultBranch, service, params.cluster)
               .then(result => {
-                if (_self.events) {
+                if (self.events) {
                   tags.kitserver_envapi_version = "v2";
-                  _self.events.emitMetric({
+                  self.events.emitMetric({
                     kind: "increment",
                     name: "envapi.call",
                     tags: tags
@@ -178,7 +227,7 @@ class EnvApiClient {
             throw err;
           }
         });
-    }).bind(this)().catch(function(err) {
+    }).bind(this)().catch(err => {
       let errMsg = err.message || err;
       // API call failed, parse returned error message if possible...
       if (
@@ -186,7 +235,7 @@ class EnvApiClient {
         err.response.body &&
         err.response.body.status === "error"
       ) {
-        errMsg = _self.convertErrorResponse(err.response.body);
+        errMsg = self.convertErrorResponse(err.response.body);
       }
 
       let tags = {
@@ -205,8 +254,8 @@ class EnvApiClient {
         }
       }
 
-      if (_self.events) {
-        _self.events.emitMetric({
+      if (self.events) {
+        self.events.emitMetric({
           kind: "event",
           title: "Failure getting envs through envapi",
           text: `Error getting envs with envapi: ${errMsg}`,
@@ -228,7 +277,8 @@ class EnvApiClient {
       headers: { "X-Auth-Token": this.apiToken },
       body: payload,
       json: true,
-      timeout: this.timeout
+      timeout: this.timeout,
+      resolveWithFullResponse: true
     };
     return this.request(options);
   }
@@ -264,7 +314,7 @@ class EnvApiClient {
         options.qs.branch = result.branch;
         config = yield this.request(options);
       }
-      result = this.convertEnvResult(config.env, result);
+      result.env = this.convertEnvResult(config.env);
       return result;
     }).bind(this)();
   }
@@ -302,17 +352,17 @@ class EnvApiClient {
   /**
 	 * Converts the returned results from the env-api service into the expected format.
 	 */
-  convertEnvResult(values, result) {
-    result.env = [];
+  convertEnvResult(values) {
+    let envs = [];
     if (values) {
       Object.keys(values).forEach(key => {
-        result.env.push({
+        envs.push({
           name: key,
           value: values[key]
         });
       });
     }
-    return result;
+    return envs;
   }
 }
 

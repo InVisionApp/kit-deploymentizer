@@ -111,6 +111,7 @@ class Deploymentizer {
       if (this.options.configPlugin) {
         let pluginOpts = this.options.configPlugin.options;
         pluginOpts.events = this.events;
+        pluginOpts.launchDarkly = this.options.launchDarkly;
         configPlugin = new PluginHandler(
           this.options.configPlugin.path,
           pluginOpts
