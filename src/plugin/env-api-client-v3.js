@@ -158,11 +158,12 @@ class EnvApiClient {
           }
 
           if (resp.statusCode === 206) {
+            const err = "Success with partial content: " + body.errors;
             if (self.events) {
               self.events.emitMetric({
                 kind: "event",
                 title: "Partial Content",
-                text: "Success with partial content: " + body.errors,
+                text: err,
                 tags: tags
               });
             }
@@ -192,9 +193,7 @@ class EnvApiClient {
                   logger.debug(
                     "enabled kit-deploymentizer-90-fail-deploy-envs: rejecting deployment..."
                   );
-                  if (body.errors) {
-                    resultErr.message = body.errors;
-                  }
+                  resultErr.message = err;
                   throw resultErr;
                 }
                 logger.debug(
