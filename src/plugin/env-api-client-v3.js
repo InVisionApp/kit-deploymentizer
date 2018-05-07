@@ -192,6 +192,9 @@ class EnvApiClient {
                   logger.debug(
                     "enabled kit-deploymentizer-90-fail-deploy-envs: rejecting deployment..."
                   );
+                  if (body.Errors) {
+                    resultErr.Error += body.Errors;
+                  }
                   throw resultErr;
                 }
                 logger.debug(
