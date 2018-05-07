@@ -277,7 +277,7 @@ describe("ENV API Client Configuration plugin", () => {
       apiConfig
         .fetch(testService, clusterDef)
         .should.be.rejectedWith(
-          "Unable to fetch 'in-config.yaml'Unable to fetch 'in-config.yaml' from 'node-test-rosie' repo"
+          "Fallback not supported and/or wrong error code 404: Unable to fetch 'in-config.yaml' from 'node-test-rosie' repo"
         );
     });
   });

@@ -148,10 +148,10 @@ class EnvApiClient {
             env: self.convertEnvResult(body.values)
           };
 
-          const resultErr = new Error({
+          const resultErr = {
             message: body.message || "No error message supplied",
             statusCode: resp.statusCode
-          });
+          };
 
           if (resp.statusCode === 200) {
             return resultOK;
@@ -200,7 +200,6 @@ class EnvApiClient {
                 return resultOK;
               });
           }
-
           throw resultErr;
         })
         .catch(err => {
@@ -228,10 +227,9 @@ class EnvApiClient {
               });
           } else {
             logger.error(
-              `Fallback not supported and/or wrong error code: ${err.statusCode ||
-                err}`
+              `Fallback not supported and/or wrong error code ${err.statusCode}: ${err.message}`
             );
-            throw err;
+            throw err.message;
           }
         });
     }).bind(this)().catch(err => {
