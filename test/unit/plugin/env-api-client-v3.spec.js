@@ -20,17 +20,19 @@ describe("ENV API Client Configuration plugin", () => {
   });
 
   describe("Load Client", () => {
-    it("should fail with validation error", done => {
+    it("should fail with validation error", () => {
       try {
         const options = { api: "http://somehost/v3" };
         const apiConfig = new ApiConfig(options);
-        done(new Error("Should have failed"));
       } catch (err) {
-        done();
+        expect(err).to.exist;
+        expect(err.message).to.be.equal(
+          "The environment variable ENVAPI_ACCESS_TOKEN is required."
+        );
       }
     });
 
-    it("should load plugin successfully", done => {
+    it("should load plugin successfully", () => {
       process.env.ENVAPI_ACCESS_TOKEN = "xxxxx-xxx-xxx";
       const options = { apiUrl: "http://somehost/api/v3", timeout: 20000 };
       const apiConfig = new ApiConfig(options);
@@ -39,9 +41,8 @@ describe("ENV API Client Configuration plugin", () => {
       expect(apiConfig.apiUrl).to.equal("http://somehost/api/v3");
       expect(apiConfig.timeout).to.equal(20000);
       delete process.env.ENVAPI_ACCESS_TOKEN;
-      done();
     });
-    it("should use ENV value for url", done => {
+    it("should use ENV value for url", () => {
       process.env.ENVAPI_ACCESS_TOKEN = "xxxxx-xxx-xxx";
       process.env.ENVAPI_URL = "http://new-url.com/api/v3";
       const options = { apiUrl: "http://somehost/api/v3", timeout: 20000 };
@@ -52,30 +53,31 @@ describe("ENV API Client Configuration plugin", () => {
       expect(apiConfig.timeout).to.equal(20000);
       delete process.env.ENVAPI_ACCESS_TOKEN;
       delete process.env.ENVAPI_URL;
-      done();
     });
   });
 
   describe("Invoke Client", () => {
     const resV3Valid = new Promise((resolve, reject) => {
       resolve({
-        status: "success",
-        message: "fetched env",
-        values: {
-          GET_HOSTS_FROM: "dns",
-          MAX_RETRIES: "0",
-          MEMBER_HOSTS:
-            "mongoreplica-01-svc:27017,mongoreplica-02-svc:27017,mongoreplica-03-svc:27017",
-          REPLICA_SET_NAME: "rs0",
-          WAIT_TIME: "60000"
+        statusCode: 200,
+        body: {
+          status: "success",
+          message: "fetched env",
+          values: {
+            GET_HOSTS_FROM: "dns",
+            MAX_RETRIES: "0",
+            MEMBER_HOSTS:
+              "mongoreplica-01-svc:27017,mongoreplica-02-svc:27017,mongoreplica-03-svc:27017",
+            REPLICA_SET_NAME: "rs0",
+            WAIT_TIME: "60000"
+          }
         }
       });
     });
     const resV3Invalid = new Promise((resolve, reject) => {
       reject({
         statusCode: 404,
-        message:
-          '404 - {"message":"Unable to fetch \'in-config.yaml\' from \'node-test-rosie\' repo, branch \'master\': GET https://api.github.com/repos/InvisionApp/node-test-rosie/contents/in-config.yaml?ref=master: 404 Not Found []","status":"error"}'
+        message: "Unable to fetch 'in-config.yaml' from 'node-test-rosie' repo"
       });
     });
     const resV2Env = new Promise((resolve, reject) => {
@@ -117,20 +119,15 @@ describe("ENV API Client Configuration plugin", () => {
       delete process.env.ENVAPI_ACCESS_TOKEN;
     });
 
-    it("should fail with error", done => {
-      Promise.coroutine(function*() {
-        const options = {
-          apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
-          supportFallback: true
-        };
-        const apiConfig = new ApiConfig(options);
-        const envs = yield apiConfig.fetch(testrosieService, "cluster-name");
-        done(new Error("Should have failed"));
-      })().catch(err => {
-        expect(err.message).to.exist;
-        expect(err.message).to.have.string("Invalid argument for 'cluster'");
-        done();
-      });
+    it("should fail with error", () => {
+      const options = {
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: true
+      };
+      const apiConfig = new ApiConfig(options);
+      apiConfig
+        .fetch(testrosieService, "cluster-name")
+        .should.be.rejectedWith("Invalid argument for 'cluster'");
     });
 
     it("should send metrics via events", () => {
@@ -172,133 +169,116 @@ describe("ENV API Client Configuration plugin", () => {
         });
     });
 
-    it("should call request to v3 and succeed", done => {
-      Promise.coroutine(function*() {
-        var rp = sinon.stub();
-        rp.onFirstCall().returns(resV3Valid);
-        const cluster = {
-          kind: "ClusterNamespace",
-          metadata: {
-            name: "staging-cluster",
-            type: "staging",
-            environment: "staging",
-            domain: "somewbesite.com",
-            restricted: true
-          }
-        };
-        const config = {
-          kind: "ResourceConfig",
-          env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
-        };
-        const clusterDef = new ClusterDefinition(cluster, config);
+    it("should call request to v3 and succeed", () => {
+      var rp = sinon.stub();
+      rp.onFirstCall().returns(resV3Valid);
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
 
-        const options = {
-          apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
-          supportFallback: true
-        };
-        const apiConfig = new ApiConfig(options);
-        apiConfig.request = rp;
+      const options = {
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: true
+      };
+      const apiConfig = new ApiConfig(options);
+      apiConfig.request = rp;
 
-        let envs;
-        envs = yield apiConfig.fetch(testService, clusterDef);
-        expect(rp.callCount).to.equal(1);
-
-        expect(envs.env.length).to.equal(5);
-        expect(envs.env[0].name).to.equal("GET_HOSTS_FROM");
-        expect(envs.env[0].value).to.equal("dns");
-        expect(envs.env[1].name).to.equal("MAX_RETRIES");
-        expect(envs.env[1].value).to.equal("0");
-
-        done();
-      })().catch(err => {
-        console.log(JSON.stringify(err));
-        done(err);
-      });
+      apiConfig
+        .fetch(testService, clusterDef)
+        .should.be.fulfilled.then(envs => {
+          expect(rp.callCount).to.equal(1);
+          expect(envs.env.length).to.equal(5);
+          expect(envs.env[0].name).to.equal("GET_HOSTS_FROM");
+          expect(envs.env[0].value).to.equal("dns");
+          expect(envs.env[1].name).to.equal("MAX_RETRIES");
+          expect(envs.env[1].value).to.equal("0");
+        });
     });
 
-    it("should call request to v3 and fallback to v1", done => {
-      Promise.coroutine(function*() {
-        var rp = sinon.stub();
-        rp.onFirstCall().returns(resV3Invalid);
-        rp.onSecondCall().returns(resV2Env);
-        const cluster = {
-          kind: "ClusterNamespace",
-          metadata: {
-            name: "staging-cluster",
-            type: "staging",
-            environment: "staging",
-            domain: "somewbesite.com",
-            restricted: true
-          }
-        };
-        const config = {
-          kind: "ResourceConfig",
-          env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
-        };
-        const clusterDef = new ClusterDefinition(cluster, config);
+    it("should call request to v3 and fallback to v1", () => {
+      var rp = sinon.stub();
+      rp.onFirstCall().returns(resV3Invalid);
+      rp.onSecondCall().returns(resV2Env);
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
 
-        const options = {
-          apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
-          supportFallback: true
-        };
-        const apiConfig = new ApiConfig(options);
-        apiConfig.request = rp;
+      const options = {
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: true
+      };
+      const apiConfig = new ApiConfig(options);
+      apiConfig.request = rp;
 
-        let envs;
-        envs = yield apiConfig.fetch(testService, clusterDef);
-        expect(rp.callCount).to.equal(2);
+      apiConfig
+        .fetch(testService, clusterDef)
+        .should.be.fulfilled.then(envs => {
+          expect(rp.callCount).to.equal(2);
 
-        expect(envs.env.length).to.equal(5);
-        expect(envs.env[0].name).to.equal("GET_HOSTS_FROM");
-        expect(envs.env[0].value).to.equal("dns");
-        expect(envs.env[1].name).to.equal("MAX_RETRIES");
-        expect(envs.env[1].value).to.equal("0");
-
-        done();
-      })().catch(err => {
-        console.log(JSON.stringify(err));
-        done(err);
-      });
+          expect(envs.env.length).to.equal(5);
+          expect(envs.env[0].name).to.equal("GET_HOSTS_FROM");
+          expect(envs.env[0].value).to.equal("dns");
+          expect(envs.env[1].name).to.equal("MAX_RETRIES");
+          expect(envs.env[1].value).to.equal("0");
+        });
     });
 
-    it("should call request to v3 and no fallback", done => {
-      Promise.coroutine(function*() {
-        var rp = sinon.stub();
-        rp.onFirstCall().returns(resV3Invalid);
-        rp.onSecondCall().returns(resV2Env);
-        const cluster = {
-          kind: "ClusterNamespace",
-          metadata: {
-            name: "staging-cluster",
-            type: "staging",
-            environment: "staging",
-            domain: "somewbesite.com",
-            restricted: true
-          }
-        };
-        const config = {
-          kind: "ResourceConfig",
-          env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
-        };
-        const clusterDef = new ClusterDefinition(cluster, config);
+    it("should call request to v3 and no fallback", () => {
+      let rp = sinon.stub();
+      rp.onFirstCall().returns(resV3Invalid);
+      rp.onSecondCall().returns(resV2Env);
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
 
-        const options = {
-          apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
-          supportFallback: false
-        };
-        const apiConfig = new ApiConfig(options);
-        apiConfig.request = rp;
+      const options = {
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: false
+      };
+      const apiConfig = new ApiConfig(options);
+      apiConfig.request = rp;
 
-        let envs;
-        envs = yield apiConfig.fetch(testService, clusterDef);
-        expect(rp.callCount).to.equal(1);
-
-        done(new Error("Should have thrown Error"));
-      })().catch(err => {
-        expect(err.message).to.exist;
-        expect(err.message).to.have.string("Unable to fetch 'in-config.yaml'");
-        done();
-      });
+      apiConfig
+        .fetch(testService, clusterDef)
+        .should.be.rejectedWith(
+          "Fallback not supported and/or wrong error code 404: Unable to fetch 'in-config.yaml' from 'node-test-rosie' repo"
+        );
     });
   });
 });
