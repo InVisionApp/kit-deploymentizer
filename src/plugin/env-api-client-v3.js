@@ -231,7 +231,7 @@ class EnvApiClient {
             logger.error(
               `Fallback not supported and/or wrong error code ${err.statusCode}: ${err.message}`
             );
-            throw err.message;
+            throw new Error(err.message);
           }
         });
     }).bind(this)().catch(err => {
