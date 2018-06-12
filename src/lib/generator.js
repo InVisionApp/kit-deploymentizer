@@ -550,7 +550,7 @@ class Generator {
           );
         }
       } catch (e) {
-        console.log(e);
+        this.eventHandler.emitWarn(e.toString() ? e.toString() : e);
       }
       return;
     }).bind(this)();
