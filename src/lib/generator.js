@@ -21,8 +21,9 @@ function createClusterDirectory(clusterPath) {
   // Try to make directory if it doesn't exist yet
   return yamlHandler.exists(clusterPath).then(exists => {
     if (!exists) {
-      fseMkdirs(clusterPath);
+      return fseMkdirs(clusterPath);
     }
+    return;
   });
 }
 
@@ -549,7 +550,7 @@ class Generator {
           );
         }
       } catch (e) {
-        console.log(e);
+        this.eventHandler.emitWarn(e.toString() ? e.toString() : e);
       }
       return;
     }).bind(this)();
