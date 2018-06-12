@@ -73,7 +73,6 @@ class ElroySync {
         loopCount++;
       } // end while
     })().catch(err => {
-      console.log(err);
       throw err;
     });
   }
