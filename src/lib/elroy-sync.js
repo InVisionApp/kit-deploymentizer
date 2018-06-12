@@ -5,7 +5,7 @@ const request = require("request-promise");
 const errors = require("request-promise/errors");
 const Promise = require("bluebird");
 
-const MaxCount = 500;
+const MaxCount = 100;
 
 /**
  * Handles Syncing Clusters to Elroy
@@ -26,32 +26,39 @@ class ElroySync {
         "X-Auth-Token": options.elroySecret
       },
       qs: {
-        limit: MaxCount
+        limit: MaxCount,
+        active: true,
+        index: 0
       },
       json: true
     };
-    return request(req)
-      .then(res => {
-        if (res.count > MaxCount) {
-          events.emitFatal(
-            `DeploymentEnvironments returned to many Environments: ${res.count}`
-          );
-          return;
-        }
+
+    return Promise.coroutine(function*() {
+
+      let count = MaxCount;
+      let loopCount = 0;
+      
+      // We loop through processing 100 environments at a time
+      while (count === MaxCount) {
+        events.emitInfo(`Starting loop: ${loopCount}`);
+        let res = yield request(req)
+        count = res.count;
+        req.qs.index = res.index;
+        events.emitInfo(`Cluster loop count for deactivation: ${loopCount}`);
+
         // If we load to few clusters from the file systems, something is wrong. Typically only 1-2 clusters
         // are deactivated at any one time, but the res contains existing inactive clusters - approx 15 at last check.
         // this is not ideal, but should keep a mass in activation from happening.
-        if (clusterDefs.length < res.count - 50) {
+        if (loopCount == 0 && clusterDefs.length < res.count - 50) {
           events.emitInfo(
             `To few cluster definitions to process ${clusterDefs.length} vs returned environments ${res.count}, skipping...`
           );
-          return;
+          break;
         }
         events.emitInfo(
           `Checking ${res.count} Clusters against definitions ${clusterDefs.length}`
         );
-        let toDeactivate = [];
-        res.items.forEach(function(deployEnv) {
+        for (let deployEnv of res.items) {
           let found = _.some(clusterDefs, [
             "cluster.metadata.name",
             deployEnv.name
@@ -60,16 +67,17 @@ class ElroySync {
           if (!found && deployEnv.active) {
             events.emitInfo(`Deactivating Cluster ${deployEnv.name}`);
             deployEnv.active = false;
-            toDeactivate.push(_self.updateCluster(deployEnv, events, options));
+            yield _self.updateCluster(deployEnv, events, options);
           }
-        });
-        events.emitInfo(`Cluster count deactivated: ${toDeactivate.length}`);
-        return Promise.all(toDeactivate);
-      })
-      .catch(err => {
-        throw err;
-      });
+        }
+        loopCount++;
+      } // end while
+    })().catch(err => {
+      console.log(err)
+      throw err
+    });
   }
+
 
   /**
 	 * Saves the given cluster definition to an external Elroy instance. Returns a promise that is resolved on success.
