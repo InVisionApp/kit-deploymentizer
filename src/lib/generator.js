@@ -21,7 +21,7 @@ function createClusterDirectory(clusterPath) {
   // Try to make directory if it doesn't exist yet
   return yamlHandler.exists(clusterPath).then(exists => {
     if (!exists) {
-      fseMkdirs(clusterPath);
+      return fseMkdirs(clusterPath);
     }
   });
 }
