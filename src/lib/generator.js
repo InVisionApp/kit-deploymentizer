@@ -23,6 +23,7 @@ function createClusterDirectory(clusterPath) {
     if (!exists) {
       return fseMkdirs(clusterPath);
     }
+    return;
   });
 }
 
