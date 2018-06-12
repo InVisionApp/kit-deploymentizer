@@ -33,15 +33,15 @@ class ElroySync {
       json: true
     };
 
+    // uses yield for looping through requests.
     return Promise.coroutine(function*() {
-
       let count = MaxCount;
       let loopCount = 0;
-      
+
       // We loop through processing 100 environments at a time
       while (count === MaxCount) {
         events.emitInfo(`Starting loop: ${loopCount}`);
-        let res = yield request(req)
+        let res = yield request(req);
         count = res.count;
         req.qs.index = res.index;
         events.emitInfo(`Cluster loop count for deactivation: ${loopCount}`);
@@ -73,11 +73,10 @@ class ElroySync {
         loopCount++;
       } // end while
     })().catch(err => {
-      console.log(err)
-      throw err
+      console.log(err);
+      throw err;
     });
   }
-
 
   /**
 	 * Saves the given cluster definition to an external Elroy instance. Returns a promise that is resolved on success.
