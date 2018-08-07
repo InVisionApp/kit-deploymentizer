@@ -171,40 +171,7 @@ class EnvApiClient {
                 tags: tags
               });
             }
-
-            if (!self.launchDarkly) {
-              if (self.events) {
-                self.events.emitMetric({
-                  kind: "event",
-                  title: "LaunchDarkly undefined",
-                  text: "Launchdarkly is undefined",
-                  tags: tags
-                });
-              }
-              return resultOK;
-            }
-
-            return self.launchDarkly
-              .toggle("kit-deploymentizer-90-fail-deploy-envs")
-              .then(isEnabled => {
-                tags.feature_name = "kit-deploymentizer-90-fail-deploy-envs";
-                self.events.emitMetric({
-                  kind: "increment",
-                  name: isEnabled ? "feature.enabled" : "feature.disabled",
-                  tags: tags
-                });
-                if (isEnabled) {
-                  logger.debug(
-                    "enabled kit-deploymentizer-90-fail-deploy-envs: rejecting deployment..."
-                  );
-                  resultErr.message = err;
-                  throw resultErr;
-                }
-                logger.debug(
-                  "disabled kit-deploymentizer-90-fail-deploy-envs: continue deployment..."
-                );
-                return resultOK;
-              });
+            resultErr.message = err;
           }
           throw resultErr;
         })
@@ -279,7 +246,6 @@ class EnvApiClient {
 
   /**
 	 * Determines the Endpoint's version based on feature flag .
-   * /api/v4/resources/{resource}/deployment-environments/{depEnv}?ref=SHA
 	 */
   // TODO (Manuel): delete this after api v4 is stable and use v4 for all
   determineApiVersionCall(tags) {
@@ -317,11 +283,10 @@ class EnvApiClient {
 
   /**
 	 * Calls the V4 Endpoint.
-   * /api/v4/resources/{resource}/deployment-environments/{depEnv}?ref=SHA
 	 */
   callv4Api(params) {
     const uri = `${this
-      .apiUrl}/v4}/resources/${params.service}/deployment-environments/${params.environment}?ref=${params.ref}`;
+      .apiUrl}/v4/resources/${params.service}/deployment-environments/${params.environment}?ref=${params.ref}`;
     let options = {
       method: "GET",
       uri: uri,
