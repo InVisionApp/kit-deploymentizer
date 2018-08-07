@@ -39,6 +39,7 @@ class EnvApiClient {
     }
     this.events = options.events || undefined;
     this.launchDarkly = options.launchDarkly || undefined;
+    this.ref = options.commitId || "master";
   }
 
   /**
@@ -120,7 +121,8 @@ class EnvApiClient {
         service: service.annotations[EnvApiClient.annotationServiceName],
         environment: cluster.metadata().environment,
         cluster: cluster.name(),
-        metadata: metadata
+        metadata: metadata,
+        ref: self.ref
       };
 
       let tags = {
@@ -132,8 +134,9 @@ class EnvApiClient {
         kit_resource: params.service
       };
 
-      return self
-        .callv3Api(params)
+      let res = { env: {} };
+      const apiFnCall = self.determineApiVersionCall(tags).bind(self);
+      return apiFnCall(params)
         .then(resp => {
           if (self.events) {
             self.events.emitMetric({
@@ -144,9 +147,12 @@ class EnvApiClient {
           }
 
           const body = resp.body;
-          const resultOK = {
-            env: self.convertEnvResult(body.values)
-          };
+          let resultOK = {};
+          if (tags.envapi_version === "v4") {
+            resultOK.env = body.values;
+          } else {
+            resultOK.env = self.convertEnvResult(body.values);
+          }
 
           const resultErr = {
             message: body.message || "No error message supplied",
@@ -271,6 +277,62 @@ class EnvApiClient {
       }
       throw new Error(errMsg);
     });
+  }
+
+  /**
+	 * Determines the Endpoint's version based on feature toogle .
+   * /api/v4/resources/{resource}/deployment-environments/{depEnv}?ref=SHA
+	 */
+  // TODO (Manuel): delete this after api v4 is stable and use v4 for all
+  determineApiVersionCall(tags) {
+    const self = this;
+
+    let apiFn = self.callv3Api;
+    if (!self.launchDarkly) {
+      logger.debug("launchDarkly is undefined");
+      return apiFn;
+    }
+
+    self.launchDarkly
+      .toggle("kit-deploymentizer-94-api-v4-call")
+      .then(isEnabled => {
+        tags.feature_name = "kit-deploymentizer-94-api-v4-call";
+
+        self.events.emitMetric({
+          kind: "increment",
+          name: isEnabled ? "feature.enabled" : "feature.disabled",
+          tags: tags
+        });
+
+        if (isEnabled) {
+          logger.debug("enabled envapi-v4-call ...");
+          tags.envapi_version = "v4";
+          tags.envapi_resource_ref = self.ref;
+          apiFn = self.callv4Api;
+        } else {
+          logger.debug("disabled envapi-v4-call, so calling v3 endpoint ...");
+        }
+      });
+
+    return apiFn;
+  }
+
+  /**
+	 * Calls the V4 Endpoint.
+   * /api/v4/resources/{resource}/deployment-environments/{depEnv}?ref=SHA
+	 */
+  callv4Api(params) {
+    const uri = `${this
+      .apiUrl}/v4}/resources/${params.service}/deployment-environments/${params.environment}?ref=${params.ref}`;
+    let options = {
+      method: "GET",
+      uri: uri,
+      headers: { "X-Auth-Token": this.apiToken },
+      json: true,
+      timeout: this.timeout,
+      resolveWithFullResponse: true
+    };
+    return this.request(options);
   }
 
   /**
