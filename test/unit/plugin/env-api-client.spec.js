@@ -1,302 +1,485 @@
 "use strict";
 
-var expect = require("chai").expect;
 const Promise = require("bluebird");
 const sinon = require("sinon");
 const ClusterDefinition = require("../../../src/lib/cluster-definition");
+const ApiConfig = require("../../../src/plugin/env-api-client");
+const EventHandler = require("../../../src/util/event-handler");
+
+const chai = require("chai");
+const chaiAsPromised = require("chai-as-promised");
+chai.use(chaiAsPromised);
+chai.should();
+const expect = chai.expect;
 
 describe("ENV API Client Configuration plugin", () => {
   let ApiConfig;
+
   before(() => {
-    process.env.ENVAPI_ACCESS_TOKEN = "sometoken";
     ApiConfig = require("../../../src/plugin/env-api-client");
   });
 
-  after(() => {
-    delete process.env.ENVAPI_ACCESS_TOKEN;
+  describe("Load Client", () => {
+    it("should fail with validation error", () => {
+      try {
+        const options = { api: "http://somehost/v3" };
+        const apiConfig = new ApiConfig(options);
+      } catch (err) {
+        expect(err).to.exist;
+        expect(err.message).to.be.equal(
+          "The environment variable ENVAPI_ACCESS_TOKEN is required."
+        );
+      }
+    });
+
+    it("should load plugin successfully", () => {
+      process.env.ENVAPI_ACCESS_TOKEN = "xxxxx-xxx-xxx";
+      const options = { apiUrl: "http://somehost/api/v3", timeout: 20000 };
+      const apiConfig = new ApiConfig(options);
+      expect(apiConfig).to.exist;
+      expect(apiConfig.apiToken).to.equal("xxxxx-xxx-xxx");
+      expect(apiConfig.apiUrl).to.equal("http://somehost/api/v3");
+      expect(apiConfig.timeout).to.equal(20000);
+      delete process.env.ENVAPI_ACCESS_TOKEN;
+    });
+
+    it("should use ENV value for url", () => {
+      process.env.ENVAPI_ACCESS_TOKEN = "xxxxx-xxx-xxx";
+      process.env.ENVAPI_URL = "http://new-url.com/api/v3";
+      const options = { apiUrl: "http://somehost/api/v3", timeout: 20000 };
+      const apiConfig = new ApiConfig(options);
+      expect(apiConfig).to.exist;
+      expect(apiConfig.apiToken).to.equal("xxxxx-xxx-xxx");
+      expect(apiConfig.apiUrl).to.equal("http://new-url.com/api/v3");
+      expect(apiConfig.timeout).to.equal(20000);
+      delete process.env.ENVAPI_ACCESS_TOKEN;
+      delete process.env.ENVAPI_URL;
+    });
   });
 
-  describe("Load Client", () => {
-    it("should fail with validation error", done => {
-      try {
-        const apiConfig = new ApiConfig();
-        done(new Error("Should have failed"));
-      } catch (err) {
-        done();
-      }
+  describe("Api V3 Calls", () => {
+    const resV3Valid = new Promise((resolve, reject) => {
+      resolve({
+        statusCode: 200,
+        body: {
+          status: "success",
+          message: "fetched env",
+          values: {
+            GET_HOSTS_FROM: "dns",
+            MAX_RETRIES: "0",
+            MEMBER_HOSTS:
+              "mongoreplica-01-svc:27017,mongoreplica-02-svc:27017,mongoreplica-03-svc:27017",
+            REPLICA_SET_NAME: "rs0",
+            WAIT_TIME: "60000"
+          }
+        }
+      });
     });
 
-    it("should fail with validation error", done => {
-      try {
-        const options = { api: "http://somehost/v1", Token: "SOME-TOKEN" };
-        const apiConfig = new ApiConfig(options);
-        done(new Error("Should have failed"));
-      } catch (err) {
-        done();
-      }
+    const resV3Invalid = new Promise((resolve, reject) => {
+      reject({
+        statusCode: 404,
+        message: "Unable to fetch 'in-config.yaml' from 'node-test-rosie' repo"
+      });
     });
 
-    it("should load plugin successfully", done => {
+    const resV2Env = new Promise((resolve, reject) => {
+      resolve({
+        env: {
+          GET_HOSTS_FROM: "dns",
+          MAX_RETRIES: "0",
+          MEMBER_HOSTS:
+            "mongoreplica-01-svc:27017,mongoreplica-02-svc:27017,mongoreplica-03-svc:27017",
+          REPLICA_SET_NAME: "rs0",
+          WAIT_TIME: "60000"
+        },
+        k8s: {
+          branch: "develop"
+        }
+      });
+    });
+
+    const testrosieService = {
+      name: "testrosie",
+      annotations: {
+        "kit-deploymentizer/env-api-service": "node-test-rosie",
+        "kit-deploymentizer/env-api-branch": "master"
+      }
+    };
+    const testService = {
+      name: "test-service",
+      annotations: {
+        "kit-deploymentizer/env-api-service": "test-service",
+        "kit-deploymentizer/env-api-branch": "master"
+      }
+    };
+
+    before(() => {
+      process.env.ENVAPI_ACCESS_TOKEN = "xxxxx-xxx-xxx";
+    });
+
+    after(() => {
+      delete process.env.ENVAPI_ACCESS_TOKEN;
+    });
+
+    it("should fail with error", () => {
       const options = {
-        apiUrl: "http://somehost/v1",
-        apiToken: "SOME-TOKEN",
-        timeout: 20000
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: true
       };
       const apiConfig = new ApiConfig(options);
-      expect(apiConfig).to.exist;
-      expect(apiConfig.apiToken).to.equal("SOME-TOKEN");
-      expect(apiConfig.apiUrl).to.equal("http://somehost/v1");
-      expect(apiConfig.timeout).to.equal(20000);
-      done();
+      apiConfig
+        .fetch(testrosieService, "cluster-name")
+        .should.be.rejectedWith("Invalid argument for 'cluster'");
     });
-    it("should load plugin successfully and default timeout", done => {
-      const options = { apiUrl: "http://somehost/v1", apiToken: "SOME-TOKEN" };
+
+    it("should send metrics via events", () => {
+      const events = new EventHandler();
+      let sentMetric = false;
+      events.on("metric", function(msg) {
+        sentMetric = true;
+      });
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
+
+      const options = {
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        events: events
+      };
+
+      var rp = sinon.stub();
+      rp.onFirstCall().returns(resV3Valid);
+
       const apiConfig = new ApiConfig(options);
-      expect(apiConfig).to.exist;
-      expect(apiConfig.timeout).to.equal(15000);
-      done();
+      apiConfig.request = rp;
+
+      return apiConfig
+        .fetch(testService, clusterDef)
+        .should.be.fulfilled.then(() => {
+          expect(sentMetric).to.equal(true);
+        });
+    });
+
+    it("should call request to v3 and succeed", () => {
+      var rp = sinon.stub();
+      rp.onFirstCall().returns(resV3Valid);
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
+
+      const options = {
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: true
+      };
+      const apiConfig = new ApiConfig(options);
+      apiConfig.request = rp;
+
+      apiConfig
+        .fetch(testService, clusterDef)
+        .should.be.fulfilled.then(envs => {
+          expect(rp.callCount).to.equal(1);
+          expect(envs.env.length).to.equal(5);
+          expect(envs.env[0].name).to.equal("GET_HOSTS_FROM");
+          expect(envs.env[0].value).to.equal("dns");
+          expect(envs.env[1].name).to.equal("MAX_RETRIES");
+          expect(envs.env[1].value).to.equal("0");
+        });
+    });
+
+    it("should call request to v3 and fallback to v1", () => {
+      var rp = sinon.stub();
+      rp.onFirstCall().returns(resV3Invalid);
+      rp.onSecondCall().returns(resV2Env);
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
+
+      const options = {
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: true
+      };
+      const apiConfig = new ApiConfig(options);
+      apiConfig.request = rp;
+
+      apiConfig
+        .fetch(testService, clusterDef)
+        .should.be.fulfilled.then(envs => {
+          expect(rp.callCount).to.equal(2);
+          expect(envs.env.length).to.equal(5);
+          expect(envs.env[0].name).to.equal("GET_HOSTS_FROM");
+          expect(envs.env[0].value).to.equal("dns");
+          expect(envs.env[1].name).to.equal("MAX_RETRIES");
+          expect(envs.env[1].value).to.equal("0");
+        });
+    });
+
+    it("should call request to v3 and no fallback", () => {
+      let rp = sinon.stub();
+      rp.onFirstCall().returns(resV3Invalid);
+      rp.onSecondCall().returns(resV2Env);
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
+
+      const options = {
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: false
+      };
+      const apiConfig = new ApiConfig(options);
+      apiConfig.request = rp;
+
+      apiConfig
+        .fetch(testService, clusterDef)
+        .should.be.rejectedWith(
+          "Fallback not supported and/or wrong error code 404: Unable to fetch 'in-config.yaml' from 'node-test-rosie' repo"
+        );
     });
   });
+  describe("Api V4 Calls", () => {
+    const envsResult = [
+      {
+        name: "SUBDOMAIN_REGEX",
+        kind: "config",
+        value: "\\\\.[\\\\w\\\\W]*",
+        platform_owned: false
+      },
+      {
+        name: "ROOKOUT_TOKEN",
+        kind: "config",
+        value: "aaaabbb",
+        platform_owned: false
+      },
+      {
+        name: "EMAIL_CUSTOMER_SUCCESS",
+        kind: "config",
+        value: "qateamfake@invisionapp.com",
+        platform_owned: false
+      },
+      {
+        name: "MONGO_DB",
+        kind: "secret",
+        value: "integration_invision",
+        platform_owned: false
+      },
+      {
+        name: "FREEHAND_API_URL",
+        kind: "global",
+        value: "https://freehand-api.v6.testing.invision.works",
+        platform_owned: true
+      }
+    ];
 
-  describe("Client calls", () => {
-    it("should fail with error", done => {
-      Promise.coroutine(function*() {
-        const options = { apiUrl: "http://somehost/v1", Token: "SOME-TOKEN" };
-        const apiConfig = new ApiConfig(options);
-        const service = {
-          name: "mongo-init",
-          annotations: {
-            "kit-deploymentizer/env-api-service": "mongo-init",
-            "kit-deploymentizer/env-api-branch": "develop"
-          }
-        };
-        const envs = yield apiConfig.fetch(service, "cluster-name");
-        done(new Error("Should have failed"));
-      })().catch(err => {
-        expect(err.message).to.exist;
-        expect(err.message).to.have.string("Invalid argument for 'cluster'");
-        done();
+    const resV4Valid = new Promise((resolve, reject) => {
+      resolve({
+        statusCode: 200,
+        body: {
+          status: "success",
+          values: envsResult
+        }
       });
     });
 
-    it("should only call request to env-api once, and convert values", done => {
-      Promise.coroutine(function*() {
-        const responseOne = new Promise((resolve, reject) => {
-          resolve({
-            env: {
-              GET_HOSTS_FROM: "dns",
-              MAX_RETRIES: "0",
-              MEMBER_HOSTS:
-                "mongoreplica-01-svc:27017,mongoreplica-02-svc:27017,mongoreplica-03-svc:27017",
-              REPLICA_SET_NAME: "rs0",
-              WAIT_TIME: "60000"
-            },
-            k8s: {
-              branch: "develop"
-            }
-          });
-        });
-        var rp = sinon.stub();
-        rp.onFirstCall().returns(responseOne);
-        // .onSecondCall().returns(2);
-
-        const cluster = {
-          kind: "ClusterNamespace",
-          metadata: {
-            name: "example-cluster",
-            type: "staging",
-            environment: "staging",
-            domain: "somewbesite.com"
-          }
-        };
-        const config = {
-          kind: "ResourceConfig",
-          env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
-        };
-        const clusterDef = new ClusterDefinition(cluster, config);
-
-        const options = {
-          apiUrl: "http://somehost/v1",
-          apiToken: "SOME-TOKEN",
-          k8sBranch: true
-        };
-        const apiConfig = new ApiConfig(options);
-        apiConfig.request = rp;
-
-        const service = {
-          name: "mongo-init",
-          annotations: {
-            "kit-deploymentizer/env-api-service": "mongo-init",
-            "kit-deploymentizer/env-api-branch": "develop"
-          }
-        };
-        const envs = yield apiConfig.fetch(service, clusterDef);
-        // console.log("Resolved ENVS: %j", envs);
-        expect(rp.callCount).to.equal(1);
-        let calledWith = rp.getCall(0);
-        // assert that the second call was to testing branch
-        expect(calledWith.args[0].qs.branch).to.equal("develop");
-        expect(calledWith.args[0].qs.env).to.equal("example-cluster");
-        expect(envs.branch).to.equal("develop");
-        expect(envs.env.length).to.equal(5);
-        expect(envs.env[0].name).to.equal("GET_HOSTS_FROM");
-        expect(envs.env[0].value).to.equal("dns");
-        expect(envs.env[1].name).to.equal("MAX_RETRIES");
-        expect(envs.env[1].value).to.equal("0");
-        done();
-      })().catch(err => {
-        done(err);
+    const resV4Invalid = new Promise((resolve, reject) => {
+      reject({
+        statusCode: 404,
+        message: "Unable to fetch 'in-config.yaml' from 'node-test-rosie' repo"
       });
     });
 
-    it("should call request to env-api twice, and get correct values", done => {
-      Promise.coroutine(function*() {
-        // ResponseOne is returned that says use testing branch,
-        // Request is invoked again passing in branch testing
-        // those values are used, but initial requests branch is kept.
-        const responseOne = new Promise((resolve, reject) => {
-          resolve({
-            env: {
-              GET_HOSTS_FROM: "dns",
-              MAX_RETRIES: "0",
-              WAIT_TIME: "60000"
-            },
-            k8s: {
-              branch: "testing"
-            }
-          });
-        });
-        const responseTwo = new Promise((resolve, reject) => {
-          resolve({
-            env: {
-              GET_HOSTS_FROM: "dns",
-              MAX_RETRIES: "5",
-              WAIT_TIME: "10000"
-            },
-            k8s: {
-              branch: "develop"
-            }
-          });
-        });
-        var rp = sinon.stub();
-        rp
-          .onFirstCall()
-          .returns(responseOne)
-          .onSecondCall()
-          .returns(responseTwo);
-        const options = {
-          apiUrl: "http://somehost/v1",
-          apiToken: "SOME-TOKEN",
-          k8sBranch: true
-        };
-        const apiConfig = new ApiConfig(options);
-        apiConfig.request = rp;
-
-        const cluster = {
-          kind: "ClusterNamespace",
-          metadata: {
-            name: "example-cluster",
-            type: "staging",
-            environment: "staging",
-            domain: "somewbesite.com"
+    const resV3Valid = new Promise((resolve, reject) => {
+      resolve({
+        statusCode: 200,
+        body: {
+          status: "success",
+          message: "fetched env",
+          values: {
+            GET_HOSTS_FROM: "dns",
+            MAX_RETRIES: "0",
+            MEMBER_HOSTS:
+              "mongoreplica-01-svc:27017,mongoreplica-02-svc:27017,mongoreplica-03-svc:27017",
+            REPLICA_SET_NAME: "rs0",
+            WAIT_TIME: "60000"
           }
-        };
-        const config = {
-          kind: "ResourceConfig",
-          env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
-        };
-        const clusterDef = new ClusterDefinition(cluster, config);
-
-        const service = {
-          name: "mongo-init",
-          annotations: {
-            "kit-deploymentizer/env-api-service": "mongo-init",
-            "kit-deploymentizer/env-api-branch": "develop"
-          }
-        };
-        const envs = yield apiConfig.fetch(service, clusterDef);
-        // console.log("Resolved ENVS: %j", envs);
-        expect(rp.callCount).to.equal(2);
-        let calledWith = rp.getCall(1);
-        // assert that the second call was to testing branch
-        expect(calledWith.args[0].qs.branch).to.equal("testing");
-        expect(envs.branch).to.equal("testing");
-        expect(envs.env.length).to.equal(3);
-        expect(envs.env[1].name).to.equal("MAX_RETRIES");
-        expect(envs.env[1].value).to.equal("5");
-        expect(envs.env[2].name).to.equal("WAIT_TIME");
-        expect(envs.env[2].value).to.equal("10000");
-        done();
-      })().catch(err => {
-        done(err);
+        }
       });
     });
 
-    it("should call request to env-api once, k8sBranch disabled", done => {
-      Promise.coroutine(function*() {
-        // ResponseOne is returned that says use testing branch,
-        // Request is invoked again passing in branch testing
-        // those values are used, but initial requests branch is kept.
-        const responseOne = new Promise((resolve, reject) => {
-          resolve({
-            env: {
-              GET_HOSTS_FROM: "dns",
-              MAX_RETRIES: "0",
-              WAIT_TIME: "60000"
-            },
-            k8s: {
-              branch: "testing"
-            }
-          });
-        });
-        var rp = sinon.stub();
-        rp
-          .onFirstCall()
-          .returns(responseOne)
-          .onSecondCall()
-          .returns({});
-        const options = {
-          apiUrl: "http://somehost/v1",
-          apiToken: "SOME-TOKEN"
-        };
-        const apiConfig = new ApiConfig(options);
-        apiConfig.request = rp;
+    const testService = {
+      name: "test-service",
+      annotations: {
+        "kit-deploymentizer/env-api-service": "test-service",
+        "kit-deploymentizer/env-api-branch": "master"
+      }
+    };
 
-        const cluster = {
-          kind: "ClusterNamespace",
-          metadata: {
-            name: "example-cluster",
-            type: "staging",
-            environment: "staging",
-            domain: "somewbesite.com"
-          }
-        };
-        const config = {
-          kind: "ResourceConfig",
-          env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
-        };
-        const clusterDef = new ClusterDefinition(cluster, config);
+    before(() => {
+      process.env.ENVAPI_ACCESS_TOKEN = "xxxxx-xxx-xxx";
+    });
 
-        const service = {
-          name: "mongo-init",
-          annotations: {
-            "kit-deploymentizer/env-api-service": "mongo-init",
-            "kit-deploymentizer/env-api-branch": "develop"
-          }
-        };
-        const envs = yield apiConfig.fetch(service, clusterDef);
-        // console.log("Resolved ENVS: %j", envs);
-        expect(rp.callCount).to.equal(1);
-        expect(envs.branch).to.equal("testing");
-        expect(envs.env.length).to.equal(3);
-        expect(envs.env[1].name).to.equal("MAX_RETRIES");
-        expect(envs.env[1].value).to.equal("0");
-        expect(envs.env[2].name).to.equal("WAIT_TIME");
-        expect(envs.env[2].value).to.equal("60000");
-        done();
-      })().catch(err => {
-        done(err);
+    after(() => {
+      delete process.env.ENVAPI_ACCESS_TOKEN;
+    });
+
+    it("should call request to v4 when feature flag enabled and succeed", () => {
+      var rp = sinon.stub();
+      rp.onFirstCall().returns(resV4Valid);
+
+      const events = new EventHandler();
+      let sentMetric = false;
+      events.on("metric", function(msg) {
+        sentMetric = true;
       });
+
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
+
+      const options = {
+        launchDarkly: {
+          toggle: function() {
+            return Promise.resolve(true);
+          }
+        },
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: false,
+        commitId: "shahahahaha",
+        events: events
+      };
+
+      const apiConfig = new ApiConfig(options);
+      apiConfig.request = rp;
+
+      apiConfig
+        .fetch(testService, clusterDef)
+        .should.be.fulfilled.then(envs => {
+          expect(rp.callCount).to.equal(1);
+          expect(envs).to.deep.equal({
+            env: envsResult
+          });
+          expect(sentMetric).to.equal(true);
+        });
+    });
+
+    it("should call request to v3 when feature flag disabled and succeed", () => {
+      var rp = sinon.stub();
+      rp.onFirstCall().returns(resV3Valid);
+
+      const events = new EventHandler();
+      let sentMetric = false;
+      events.on("metric", function(msg) {
+        sentMetric = true;
+      });
+
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
+
+      const options = {
+        launchDarkly: {
+          toggle: function() {
+            return Promise.resolve(false);
+          }
+        },
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: false,
+        events: events
+      };
+
+      const apiConfig = new ApiConfig(options);
+      apiConfig.request = rp;
+
+      apiConfig
+        .fetch(testService, clusterDef)
+        .should.be.fulfilled.then(envs => {
+          expect(rp.callCount).to.equal(1);
+          expect(envs).to.deep.equal({
+            env: [
+              { name: "GET_HOSTS_FROM", value: "dns" },
+              { name: "MAX_RETRIES", value: "0" },
+              {
+                name: "MEMBER_HOSTS",
+                value:
+                  "mongoreplica-01-svc:27017,mongoreplica-02-svc:27017,mongoreplica-03-svc:27017"
+              },
+              { name: "REPLICA_SET_NAME", value: "rs0" },
+              { name: "WAIT_TIME", value: "60000" }
+            ]
+          });
+          expect(sentMetric).to.equal(true);
+        });
     });
   });
 });
