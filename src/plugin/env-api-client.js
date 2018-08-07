@@ -282,8 +282,8 @@ class EnvApiClient {
   }
 
   /**
-	 * Calls the V4 Endpoint.
-	 */
+   * Calls the V4 Endpoint.
+   */
   callv4Api(params) {
     const uri = `${this
       .apiUrl}/v4/resources/${params.service}/deployment-environments/${params.environment}?ref=${params.ref}`;
@@ -299,8 +299,8 @@ class EnvApiClient {
   }
 
   /**
-	 * Calls the V3 Endpoint. This is a POST with all parameters in the body of the message
-	 */
+   * Calls the V3 Endpoint. This is a POST with all parameters in the body of the message
+   */
   callv3Api(payload) {
     const uri = `${this.apiUrl}/v3/vars`;
     let options = {
@@ -316,8 +316,8 @@ class EnvApiClient {
   }
 
   /**
-	 * Calls the v2 Endpoint. uses GET and query params
-	 */
+   * Calls the v2 Endpoint. uses GET and query params
+   */
   callv1Api(branch, service, clusterName) {
     return Promise.coroutine(function*() {
       const uri = `${this.apiUrl}/v1/service/${service.annotations[
@@ -352,8 +352,8 @@ class EnvApiClient {
   }
 
   /**
-	 * Convert the custom error messages into a String
-	 */
+   * Convert the custom error messages into a String
+   */
   convertErrorResponse(response) {
     logger.error(`Error in returned response ${response.message}`);
     let errMsg = response.message || "Received error";
@@ -367,11 +367,8 @@ class EnvApiClient {
   }
 
   /**
-	 * Fetchs the envs
-	 */
-  /**
-	 * Converts the returned results from the env-api service into the expected format.
-	 */
+   * Converts the returned results from the env-api service into the expected format.
+   */
   convertK8sResult(k8s, result) {
     if (k8s && typeof k8s === "object") {
       Object.keys(k8s).forEach(key => {
@@ -382,8 +379,8 @@ class EnvApiClient {
   }
 
   /**
-	 * Converts the returned results from the env-api service into the expected format.
-	 */
+   * Converts the returned results from the env-api service into the expected format.
+   */
   convertEnvResult(values) {
     let envs = [];
     if (values) {
