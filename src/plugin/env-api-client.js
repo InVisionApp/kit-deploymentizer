@@ -134,7 +134,6 @@ class EnvApiClient {
         kit_resource: params.service
       };
 
-      let res = { env: {} };
       const apiFnCall = self.determineApiVersionCall(tags).bind(self);
       return apiFnCall(params)
         .then(resp => {
@@ -146,16 +145,15 @@ class EnvApiClient {
             });
           }
 
-          const body = resp.body;
           let resultOK = {};
           if (tags.envapi_version === "v4") {
-            resultOK.env = body.values;
+            resultOK.env = resp.body.values;
           } else {
-            resultOK.env = self.convertEnvResult(body.values);
+            resultOK.env = self.convertEnvResult(resp.body.values);
           }
 
           const resultErr = {
-            message: body.message || "No error message supplied",
+            message: resp.body.message || "No error message supplied",
             statusCode: resp.statusCode
           };
 
@@ -164,7 +162,7 @@ class EnvApiClient {
           }
 
           if (resp.statusCode === 206) {
-            const err = "Success with partial content: " + body.errors;
+            const err = "Success with partial content: " + resp.body.errors;
             if (self.events) {
               self.events.emitMetric({
                 kind: "event",
@@ -280,7 +278,7 @@ class EnvApiClient {
   }
 
   /**
-	 * Determines the Endpoint's version based on feature toogle .
+	 * Determines the Endpoint's version based on feature flag .
    * /api/v4/resources/{resource}/deployment-environments/{depEnv}?ref=SHA
 	 */
   // TODO (Manuel): delete this after api v4 is stable and use v4 for all
