@@ -245,8 +245,8 @@ class EnvApiClient {
   }
 
   /**
-	 * Determines the Endpoint's version based on feature flag .
-	 */
+   * Determines the Endpoint's version based on feature flag .
+   */
   // TODO (Manuel): delete this after api v4 is stable and use v4 for all
   determineApiVersionCall(tags) {
     const self = this;
