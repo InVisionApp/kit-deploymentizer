@@ -59,7 +59,7 @@ class EnvApiClient {
 	 * is skipped. The annotation is `kit-deploymentizer/env-api-service: [GIT-HUB-PROJECT-NAME]`
 	 *
 	 * Call is made to get environment varibles for a given service. Supports falling back to the
-	 * v2 Endpoint if the v3 returns a 404.
+	 * v1 Endpoint if the v3 returns a 404.
 	 *
 	 * Example Result for both ENV and k8s request:
 	 * ```
@@ -185,7 +185,7 @@ class EnvApiClient {
               .callv1Api(self.defaultBranch, service, params.cluster)
               .then(result => {
                 if (self.events) {
-                  tags.kitserver_envapi_version = "v2";
+                  tags.kitserver_envapi_version = "v1";
                   self.events.emitMetric({
                     kind: "increment",
                     name: "envapi.call",
@@ -220,7 +220,7 @@ class EnvApiClient {
         app: "kit_deploymentizer",
         envapi_resource:
           service.annotations[EnvApiClient.annotationServiceName],
-        envapi_version: "v3_v2"
+        envapi_version: "v3_v1"
       };
 
       if (typeof cluster === "object") {
@@ -316,7 +316,7 @@ class EnvApiClient {
   }
 
   /**
-   * Calls the v2 Endpoint. uses GET and query params
+   * Calls the v1 Endpoint. uses GET and query params
    */
   callv1Api(branch, service, clusterName) {
     return Promise.coroutine(function*() {

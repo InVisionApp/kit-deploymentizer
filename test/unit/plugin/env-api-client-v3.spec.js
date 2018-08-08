@@ -83,7 +83,7 @@ describe("ENV API Client Configuration plugin", () => {
       });
     });
 
-    const resV2Env = new Promise((resolve, reject) => {
+    const resV1Env = new Promise((resolve, reject) => {
       resolve({
         env: {
           GET_HOSTS_FROM: "dns",
@@ -214,7 +214,7 @@ describe("ENV API Client Configuration plugin", () => {
     it("should call request to v3 and fallback to v1", () => {
       var rp = sinon.stub();
       rp.onFirstCall().returns(resV3Invalid);
-      rp.onSecondCall().returns(resV2Env);
+      rp.onSecondCall().returns(resV1Env);
       const cluster = {
         kind: "ClusterNamespace",
         metadata: {
@@ -253,7 +253,7 @@ describe("ENV API Client Configuration plugin", () => {
     it("should call request to v3 and no fallback", () => {
       let rp = sinon.stub();
       rp.onFirstCall().returns(resV3Invalid);
-      rp.onSecondCall().returns(resV2Env);
+      rp.onSecondCall().returns(resV1Env);
       const cluster = {
         kind: "ClusterNamespace",
         metadata: {
