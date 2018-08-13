@@ -39,6 +39,7 @@ class EnvApiClient {
     }
     this.events = options.events || undefined;
     this.launchDarkly = options.launchDarkly || undefined;
+    this.ref = options.commitId || "master";
   }
 
   /**
@@ -58,7 +59,7 @@ class EnvApiClient {
 	 * is skipped. The annotation is `kit-deploymentizer/env-api-service: [GIT-HUB-PROJECT-NAME]`
 	 *
 	 * Call is made to get environment varibles for a given service. Supports falling back to the
-	 * v2 Endpoint if the v3 returns a 404.
+	 * v1 Endpoint if the v3 returns a 404.
 	 *
 	 * Example Result for both ENV and k8s request:
 	 * ```
@@ -120,7 +121,8 @@ class EnvApiClient {
         service: service.annotations[EnvApiClient.annotationServiceName],
         environment: cluster.metadata().environment,
         cluster: cluster.name(),
-        metadata: metadata
+        metadata: metadata,
+        ref: self.ref
       };
 
       let tags = {
@@ -132,8 +134,8 @@ class EnvApiClient {
         kit_resource: params.service
       };
 
-      return self
-        .callv3Api(params)
+      const apiFnCall = self.determineApiVersionCall(tags).bind(self);
+      return apiFnCall(params)
         .then(resp => {
           if (self.events) {
             self.events.emitMetric({
@@ -143,13 +145,15 @@ class EnvApiClient {
             });
           }
 
-          const body = resp.body;
-          const resultOK = {
-            env: self.convertEnvResult(body.values)
-          };
+          let resultOK = {};
+          if (tags.envapi_version === "v4") {
+            resultOK.env = resp.body.values;
+          } else {
+            resultOK.env = self.convertEnvResult(resp.body.values);
+          }
 
           const resultErr = {
-            message: body.message || "No error message supplied",
+            message: resp.body.message || "No error message supplied",
             statusCode: resp.statusCode
           };
 
@@ -158,7 +162,7 @@ class EnvApiClient {
           }
 
           if (resp.statusCode === 206) {
-            const err = "Success with partial content: " + body.errors;
+            const err = "Success with partial content: " + resp.body.errors;
             if (self.events) {
               self.events.emitMetric({
                 kind: "event",
@@ -167,40 +171,7 @@ class EnvApiClient {
                 tags: tags
               });
             }
-
-            if (!self.launchDarkly) {
-              if (self.events) {
-                self.events.emitMetric({
-                  kind: "event",
-                  title: "LaunchDarkly undefined",
-                  text: "Launchdarkly is undefined",
-                  tags: tags
-                });
-              }
-              return resultOK;
-            }
-
-            return self.launchDarkly
-              .toggle("kit-deploymentizer-90-fail-deploy-envs")
-              .then(isEnabled => {
-                tags.feature_name = "kit-deploymentizer-90-fail-deploy-envs";
-                self.events.emitMetric({
-                  kind: "increment",
-                  name: isEnabled ? "feature.enabled" : "feature.disabled",
-                  tags: tags
-                });
-                if (isEnabled) {
-                  logger.debug(
-                    "enabled kit-deploymentizer-90-fail-deploy-envs: rejecting deployment..."
-                  );
-                  resultErr.message = err;
-                  throw resultErr;
-                }
-                logger.debug(
-                  "disabled kit-deploymentizer-90-fail-deploy-envs: continue deployment..."
-                );
-                return resultOK;
-              });
+            resultErr.message = err;
           }
           throw resultErr;
         })
@@ -214,7 +185,7 @@ class EnvApiClient {
               .callv1Api(self.defaultBranch, service, params.cluster)
               .then(result => {
                 if (self.events) {
-                  tags.kitserver_envapi_version = "v2";
+                  tags.kitserver_envapi_version = "v1";
                   self.events.emitMetric({
                     kind: "increment",
                     name: "envapi.call",
@@ -249,7 +220,7 @@ class EnvApiClient {
         app: "kit_deploymentizer",
         envapi_resource:
           service.annotations[EnvApiClient.annotationServiceName],
-        envapi_version: "v3_v2"
+        envapi_version: "v3_v1"
       };
 
       if (typeof cluster === "object") {
@@ -274,8 +245,62 @@ class EnvApiClient {
   }
 
   /**
-	 * Calls the V3 Endpoint. This is a POST with all parameters in the body of the message
-	 */
+   * Determines the Endpoint's version based on feature flag .
+   */
+  // TODO (Manuel): delete this after api v4 is stable and use v4 for all
+  determineApiVersionCall(tags) {
+    const self = this;
+
+    let apiFn = self.callv3Api;
+    if (!self.launchDarkly) {
+      logger.debug("launchDarkly is undefined");
+      return apiFn;
+    }
+
+    self.launchDarkly
+      .toggle("kit-deploymentizer-94-api-v4-call")
+      .then(isEnabled => {
+        tags.feature_name = "kit-deploymentizer-94-api-v4-call";
+
+        self.events.emitMetric({
+          kind: "increment",
+          name: isEnabled ? "feature.enabled" : "feature.disabled",
+          tags: tags
+        });
+
+        if (isEnabled) {
+          logger.debug("enabled envapi-v4-call ...");
+          tags.envapi_version = "v4";
+          tags.envapi_resource_ref = self.ref;
+          apiFn = self.callv4Api;
+        } else {
+          logger.debug("disabled envapi-v4-call, so calling v3 endpoint ...");
+        }
+      });
+
+    return apiFn;
+  }
+
+  /**
+   * Calls the V4 Endpoint.
+   */
+  callv4Api(params) {
+    const uri = `${this
+      .apiUrl}/v4/resources/${params.service}/deployment-environments/${params.environment}?ref=${params.ref}`;
+    let options = {
+      method: "GET",
+      uri: uri,
+      headers: { "X-Auth-Token": this.apiToken },
+      json: true,
+      timeout: this.timeout,
+      resolveWithFullResponse: true
+    };
+    return this.request(options);
+  }
+
+  /**
+   * Calls the V3 Endpoint. This is a POST with all parameters in the body of the message
+   */
   callv3Api(payload) {
     const uri = `${this.apiUrl}/v3/vars`;
     let options = {
@@ -291,8 +316,8 @@ class EnvApiClient {
   }
 
   /**
-	 * Calls the v2 Endpoint. uses GET and query params
-	 */
+   * Calls the v1 Endpoint. uses GET and query params
+   */
   callv1Api(branch, service, clusterName) {
     return Promise.coroutine(function*() {
       const uri = `${this.apiUrl}/v1/service/${service.annotations[
@@ -327,8 +352,8 @@ class EnvApiClient {
   }
 
   /**
-	 * Convert the custom error messages into a String
-	 */
+   * Convert the custom error messages into a String
+   */
   convertErrorResponse(response) {
     logger.error(`Error in returned response ${response.message}`);
     let errMsg = response.message || "Received error";
@@ -342,11 +367,8 @@ class EnvApiClient {
   }
 
   /**
-	 * Fetchs the envs
-	 */
-  /**
-	 * Converts the returned results from the env-api service into the expected format.
-	 */
+   * Converts the returned results from the env-api service into the expected format.
+   */
   convertK8sResult(k8s, result) {
     if (k8s && typeof k8s === "object") {
       Object.keys(k8s).forEach(key => {
@@ -357,8 +379,8 @@ class EnvApiClient {
   }
 
   /**
-	 * Converts the returned results from the env-api service into the expected format.
-	 */
+   * Converts the returned results from the env-api service into the expected format.
+   */
   convertEnvResult(values) {
     let envs = [];
     if (values) {
