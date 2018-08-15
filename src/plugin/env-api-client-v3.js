@@ -30,13 +30,6 @@ class EnvApiClient {
     this.timeout = options.timeout || 15000;
     this.defaultBranch = options.defaultBranch || "master";
     this.request = rp;
-    this.supportFallback = false;
-    if (
-      options.supportFallback &&
-      (options.supportFallback === "true" || options.supportFallback === true)
-    ) {
-      this.supportFallback = true;
-    }
     this.events = options.events || undefined;
     this.launchDarkly = options.launchDarkly || undefined;
     this.ref = options.commitId || "master";
@@ -135,76 +128,45 @@ class EnvApiClient {
       };
 
       const apiFnCall = self.determineApiVersionCall(tags).bind(self);
-      return apiFnCall(params)
-        .then(resp => {
+      return apiFnCall(params).then(resp => {
+        if (self.events) {
+          self.events.emitMetric({
+            kind: "increment",
+            name: "envapi.call",
+            tags: tags
+          });
+        }
+
+        let resultOK = {};
+        if (tags.envapi_version === "v4") {
+          resultOK.env = resp.body.values;
+        } else {
+          resultOK.env = self.convertEnvResult(resp.body.values);
+        }
+
+        const resultErr = {
+          message: resp.body.message || "No error message supplied",
+          statusCode: resp.statusCode
+        };
+
+        if (resp.statusCode === 200) {
+          return resultOK;
+        }
+
+        if (resp.statusCode === 206) {
+          const err = "Success with partial content: " + resp.body.errors;
           if (self.events) {
             self.events.emitMetric({
-              kind: "increment",
-              name: "envapi.call",
+              kind: "event",
+              title: "Partial Content",
+              text: err,
               tags: tags
             });
           }
-
-          let resultOK = {};
-          if (tags.envapi_version === "v4") {
-            resultOK.env = resp.body.values;
-          } else {
-            resultOK.env = self.convertEnvResult(resp.body.values);
-          }
-
-          const resultErr = {
-            message: resp.body.message || "No error message supplied",
-            statusCode: resp.statusCode
-          };
-
-          if (resp.statusCode === 200) {
-            return resultOK;
-          }
-
-          if (resp.statusCode === 206) {
-            const err = "Success with partial content: " + resp.body.errors;
-            if (self.events) {
-              self.events.emitMetric({
-                kind: "event",
-                title: "Partial Content",
-                text: err,
-                tags: tags
-              });
-            }
-            resultErr.message = err;
-          }
-          throw resultErr;
-        })
-        .catch(err => {
-          // try v1 of API if supported and we receieved a 404 from v3 endpoint
-          if (self.supportFallback && err.statusCode && err.statusCode == 404) {
-            logger.warn(
-              `Trying Fallback method with params ${self.defaultBranch}, ${service}, ${params.cluster}`
-            );
-            return self
-              .callv1Api(self.defaultBranch, service, params.cluster)
-              .then(result => {
-                if (self.events) {
-                  tags.kitserver_envapi_version = "v1";
-                  self.events.emitMetric({
-                    kind: "increment",
-                    name: "envapi.call",
-                    tags: tags
-                  });
-                }
-                return result;
-              })
-              .catch(err => {
-                logger.error("Fallback method error: " + JSON.stringify(err));
-                throw err;
-              });
-          } else {
-            logger.error(
-              `Fallback not supported and/or wrong error code ${err.statusCode}: ${err.message}`
-            );
-            throw new Error(err.message);
-          }
-        });
+          resultErr.message = err;
+        }
+        throw resultErr;
+      });
     }).bind(this)().catch(err => {
       let errMsg = err.message || err;
       // API call failed, parse returned error message if possible...
@@ -220,7 +182,7 @@ class EnvApiClient {
         app: "kit_deploymentizer",
         envapi_resource:
           service.annotations[EnvApiClient.annotationServiceName],
-        envapi_version: "v3_v1"
+        status: "error"
       };
 
       if (typeof cluster === "object") {
@@ -313,42 +275,6 @@ class EnvApiClient {
       resolveWithFullResponse: true
     };
     return this.request(options);
-  }
-
-  /**
-   * Calls the v1 Endpoint. uses GET and query params
-   */
-  callv1Api(branch, service, clusterName) {
-    return Promise.coroutine(function*() {
-      const uri = `${this.apiUrl}/v1/service/${service.annotations[
-        EnvApiClient.annotationServiceName
-      ]}`;
-      let query = { env: clusterName };
-      // if a branch is specified pass that along
-      if (
-        service.annotations ||
-        service.annotations[EnvApiClient.annotationBranchName]
-      ) {
-        query.branch = service.annotations[EnvApiClient.annotationBranchName];
-      }
-      let options = {
-        uri: uri,
-        qs: query,
-        headers: { "X-Auth-Token": this.apiToken },
-        json: true,
-        timeout: this.timeout
-      };
-      let config = yield this.request(options);
-      let result = {};
-      result = this.convertK8sResult(config.k8s, result);
-      if (this.k8sBranch && result.branch && result.branch !== query.branch) {
-        logger.debug(`Pulling envs from ${result.branch} branch`);
-        options.qs.branch = result.branch;
-        config = yield this.request(options);
-      }
-      result.env = this.convertEnvResult(config.env);
-      return result;
-    }).bind(this)();
   }
 
   /**
