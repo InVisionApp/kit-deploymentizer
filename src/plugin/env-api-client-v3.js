@@ -163,7 +163,40 @@ class EnvApiClient {
               tags: tags
             });
           }
-          resultErr.message = err;
+
+          if (!self.launchDarkly) {
+            if (self.events) {
+              self.events.emitMetric({
+                kind: "event",
+                title: "LaunchDarkly undefined",
+                text: "Launchdarkly is undefined",
+                tags: tags
+              });
+            }
+            return resultOK;
+          }
+
+          return self.launchDarkly
+            .toggle("kit-deploymentizer-90-fail-deploy-envs")
+            .then(isEnabled => {
+              tags.feature_name = "kit-deploymentizer-90-fail-deploy-envs";
+              self.events.emitMetric({
+                kind: "increment",
+                name: isEnabled ? "feature.enabled" : "feature.disabled",
+                tags: tags
+              });
+              if (isEnabled) {
+                logger.debug(
+                  "enabled kit-deploymentizer-90-fail-deploy-envs: rejecting deployment..."
+                );
+                resultErr.message = err;
+                throw resultErr;
+              }
+              logger.debug(
+                "disabled kit-deploymentizer-90-fail-deploy-envs: continue deployment..."
+              );
+              return resultOK;
+            });
         }
         throw resultErr;
       });
