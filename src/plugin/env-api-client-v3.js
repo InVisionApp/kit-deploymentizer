@@ -4,6 +4,9 @@ const Promise = require("bluebird");
 const rp = require("request-promise");
 const logger = require("log4js").getLogger();
 
+const envAPIV4 = "v4";
+const envAPIV3 = "v3";
+
 /**
  * Class for accessing the EnvApi Service.
  */
@@ -33,7 +36,6 @@ class EnvApiClient {
     this.events = options.events || undefined;
     this.launchDarkly = options.launchDarkly || undefined;
     this.ref = options.commitId || "master";
-    this._tags = {};
   }
 
   /**
@@ -118,22 +120,27 @@ class EnvApiClient {
         ref: this.ref
       };
 
-      let baseTags = {
+      let tags = {
         app: "kit_deploymentizer",
         envapi_environment: params.environment,
         envapi_cluster: params.cluster,
         envapi_resource: params.service,
-        envapi_version: "v3",
-        kit_resource: params.service
+        envapi_version: envAPIV3,
+        kit_resource: params.service,
+        envapi_resource_ref: this.ref
       };
-      this._setBaseTags(baseTags);
 
-      let apiFnCall = yield this.determineApiVersionCall();
-      apiFnCall = apiFnCall.bind(this);
+      const envapiVersion = yield this.determineApiVersionCall(tags);
 
-      let resp = yield apiFnCall(params);
+      let resp;
+      if (envapiVersion === envAPIV4) {
+        tags.envapi_version = envAPIV4;
+        resp = yield this.callv4Api(params);
+      } else {
+        resp = yield this.callv3Api(params);
+      }
 
-      return this.parseResponse(resp);
+      return this.parseResponse(resp, envapiVersion, tags);
     }).bind(this)().catch(err => {
       let errMsg = err.message || err;
       // API call failed, parse returned error message if possible...
@@ -175,13 +182,14 @@ class EnvApiClient {
 
   /**
    * Determines the Endpoint's version based on feature flag .
+   * @param {object} tags - key value pairs used for metrics tags
+   * @returns - a string indicating which envapi version sohould be used
    */
   // TODO (Manuel): delete this after api v4 is stable and use v4 for all
-  determineApiVersionCall() {
-    let tags = this._getBaseTags();
+  determineApiVersionCall(tags) {
     if (!this.launchDarkly) {
       logger.debug("launchDarkly is undefined");
-      return Promise.resolve(this.callv3Api);
+      return Promise.resolve(envAPIV3);
     }
 
     return this.launchDarkly
@@ -197,13 +205,11 @@ class EnvApiClient {
 
         if (isEnabled) {
           logger.debug("enabled envapi-v4-call ...");
-          this._addBaseTag("envapi_version", "v4");
-          this._addBaseTag("envapi_resource_ref", this.ref);
-          return this.callv4Api;
+          return envAPIV4;
         }
 
         logger.debug("disabled envapi-v4-call, so calling v3 endpoint ...");
-        return this.callv3Api;
+        return envAPIV3;
       });
   }
 
@@ -287,10 +293,13 @@ class EnvApiClient {
   /**
    * Parses the response from the env-api request
    * @param {object} resp - env-api response object
+   * @param {string} envapiVersion - the version of api used for the envapi call
+   * @param {object} tags - tags object
    * @returns - returns Promise that resolves to an resultOK or resultErr object
    */
-  parseResponse(resp) {
-    let tags = this._getBaseTags();
+  parseResponse(resp, envapiVersion, tags) {
+    console.log("\n\nDEBUG tags:");
+    console.log(tags);
     if (this.events) {
       this.events.emitMetric({
         kind: "increment",
@@ -300,7 +309,7 @@ class EnvApiClient {
     }
 
     let resultOK = {};
-    if (tags.envapi_version === "v4") {
+    if (envapiVersion === envAPIV4) {
       resultOK.env = resp.body.values;
     } else {
       resultOK.env = this.convertEnvResult(resp.body.values);
@@ -361,33 +370,6 @@ class EnvApiClient {
         });
     }
     Promise.reject(resultErr);
-  }
-
-  /**
-   * Set the _tags property for this class with the provided map
-   * @param {object} baseTags - key value map for base tags
-   */
-  _setBaseTags(baseTags) {
-    if (typeof baseTags !== "object" || baseTags === null) {
-      this._tags = {};
-    }
-    this._tags = Object.assign({}, baseTags);
-  }
-
-  /**
-   * Returns a copy of the current _tags object
-   */
-  _getBaseTags() {
-    return Object.assign({}, this._tags);
-  }
-
-  /**
-   * Adds a tag to the _tags object for this client
-   * @param {string} tagKey
-   * @param {string} tagValue
-   */
-  _addBaseTag(tagKey, tagValue) {
-    this._tags[tagKey] = tagValue;
   }
 }
 
