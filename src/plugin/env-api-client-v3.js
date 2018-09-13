@@ -4,6 +4,9 @@ const Promise = require("bluebird");
 const rp = require("request-promise");
 const logger = require("log4js").getLogger();
 
+const envAPIV4 = "v4";
+const envAPIV3 = "v3";
+
 /**
  * Class for accessing the EnvApi Service.
  */
@@ -81,7 +84,6 @@ class EnvApiClient {
 	 * @return {[type]}             envs and configuration information
 	 */
   fetch(service, cluster) {
-    const self = this;
     return Promise.coroutine(function*() {
       if (
         !service.annotations ||
@@ -115,7 +117,7 @@ class EnvApiClient {
         environment: cluster.metadata().environment,
         cluster: cluster.name(),
         metadata: metadata,
-        ref: self.ref
+        ref: this.ref
       };
 
       let tags = {
@@ -123,83 +125,22 @@ class EnvApiClient {
         envapi_environment: params.environment,
         envapi_cluster: params.cluster,
         envapi_resource: params.service,
-        envapi_version: "v3",
-        kit_resource: params.service
+        envapi_version: envAPIV3,
+        kit_resource: params.service,
+        envapi_resource_ref: this.ref
       };
 
-      const apiFnCall = self.determineApiVersionCall(tags).bind(self);
-      return apiFnCall(params).then(resp => {
-        if (self.events) {
-          self.events.emitMetric({
-            kind: "increment",
-            name: "envapi.call",
-            tags: tags
-          });
-        }
+      const envapiVersion = yield this.determineApiVersionCall(tags);
 
-        let resultOK = {};
-        if (tags.envapi_version === "v4") {
-          resultOK.env = resp.body.values;
-        } else {
-          resultOK.env = self.convertEnvResult(resp.body.values);
-        }
+      let resp;
+      if (envapiVersion === envAPIV4) {
+        tags.envapi_version = envAPIV4;
+        resp = yield this.callv4Api(params);
+      } else {
+        resp = yield this.callv3Api(params);
+      }
 
-        const resultErr = {
-          message: resp.body.message || "No error message supplied",
-          statusCode: resp.statusCode
-        };
-
-        if (resp.statusCode === 200) {
-          return resultOK;
-        }
-
-        if (resp.statusCode === 206) {
-          const err = "Success with partial content: " + resp.body.errors;
-          if (self.events) {
-            self.events.emitMetric({
-              kind: "event",
-              title: "Partial Content",
-              text: err,
-              tags: tags
-            });
-          }
-
-          if (!self.launchDarkly) {
-            if (self.events) {
-              self.events.emitMetric({
-                kind: "event",
-                title: "LaunchDarkly undefined",
-                text: "Launchdarkly is undefined",
-                tags: tags
-              });
-            }
-            return resultOK;
-          }
-
-          return self.launchDarkly
-            .toggle("kit-deploymentizer-90-fail-deploy-envs")
-            .then(isEnabled => {
-              tags.feature_name = "kit-deploymentizer-90-fail-deploy-envs";
-              self.events.emitMetric({
-                kind: "increment",
-                name: isEnabled ? "feature.enabled" : "feature.disabled",
-                tags: tags
-              });
-              if (isEnabled) {
-                logger.debug(
-                  "enabled kit-deploymentizer-90-fail-deploy-envs: rejecting deployment..."
-                );
-                resultErr.message = err;
-                throw resultErr;
-              }
-              logger.debug(
-                "disabled kit-deploymentizer-90-fail-deploy-envs: continue deployment..."
-              );
-              return resultOK;
-            });
-        }
-        throw resultErr;
-      });
+      return this.parseResponse(resp, envapiVersion, tags);
     }).bind(this)().catch(err => {
       let errMsg = err.message || err;
       // API call failed, parse returned error message if possible...
@@ -208,7 +149,7 @@ class EnvApiClient {
         err.response.body &&
         err.response.body.status === "error"
       ) {
-        errMsg = self.convertErrorResponse(err.response.body);
+        errMsg = this.convertErrorResponse(err.response.body);
       }
 
       let tags = {
@@ -227,8 +168,8 @@ class EnvApiClient {
         }
       }
 
-      if (self.events) {
-        self.events.emitMetric({
+      if (this.events) {
+        this.events.emitMetric({
           kind: "event",
           title: "Failure getting envs through envapi",
           text: `Error getting envs with envapi: ${errMsg}`,
@@ -241,23 +182,22 @@ class EnvApiClient {
 
   /**
    * Determines the Endpoint's version based on feature flag .
+   * @param {object} tags - key value pairs used for metrics tags
+   * @returns - a string indicating which envapi version sohould be used
    */
   // TODO (Manuel): delete this after api v4 is stable and use v4 for all
   determineApiVersionCall(tags) {
-    const self = this;
-
-    let apiFn = self.callv3Api;
-    if (!self.launchDarkly) {
+    if (!this.launchDarkly) {
       logger.debug("launchDarkly is undefined");
-      return apiFn;
+      return Promise.resolve(envAPIV3);
     }
 
-    self.launchDarkly
+    return this.launchDarkly
       .toggle("kit-deploymentizer-94-api-v4-call")
       .then(isEnabled => {
         tags.feature_name = "kit-deploymentizer-94-api-v4-call";
 
-        self.events.emitMetric({
+        this.events.emitMetric({
           kind: "increment",
           name: isEnabled ? "feature.enabled" : "feature.disabled",
           tags: tags
@@ -265,15 +205,12 @@ class EnvApiClient {
 
         if (isEnabled) {
           logger.debug("enabled envapi-v4-call ...");
-          tags.envapi_version = "v4";
-          tags.envapi_resource_ref = self.ref;
-          apiFn = self.callv4Api;
-        } else {
-          logger.debug("disabled envapi-v4-call, so calling v3 endpoint ...");
+          return envAPIV4;
         }
-      });
 
-    return apiFn;
+        logger.debug("disabled envapi-v4-call, so calling v3 endpoint ...");
+        return envAPIV3;
+      });
   }
 
   /**
@@ -281,7 +218,7 @@ class EnvApiClient {
    */
   callv4Api(params) {
     const uri = `${this
-      .apiUrl}/v4/resources/${params.service}/deployment-environments/${params.environment}?ref=${params.ref}`;
+      .apiUrl}/v4/resources/${params.service}/deployment-environments/${params.cluster}?ref=${params.ref}`;
     let options = {
       method: "GET",
       uri: uri,
@@ -351,6 +288,86 @@ class EnvApiClient {
       });
     }
     return envs;
+  }
+
+  /**
+   * Parses the response from the env-api request
+   * @param {object} resp - env-api response object
+   * @param {string} envapiVersion - the version of api used for the envapi call
+   * @param {object} tags - tags object
+   * @returns - returns Promise that resolves to an resultOK or resultErr object
+   */
+  parseResponse(resp, envapiVersion, tags) {
+    if (this.events) {
+      this.events.emitMetric({
+        kind: "increment",
+        name: "envapi.call",
+        tags: tags
+      });
+    }
+
+    let resultOK = {};
+    if (envapiVersion === envAPIV4) {
+      resultOK.env = resp.body.values;
+    } else {
+      resultOK.env = this.convertEnvResult(resp.body.values);
+    }
+
+    const resultErr = {
+      message: resp.body.message || "No error message supplied",
+      statusCode: resp.statusCode
+    };
+
+    if (resp.statusCode === 200) {
+      return Promise.resolve(resultOK);
+    }
+
+    if (resp.statusCode === 206) {
+      const err = "Success with partial content: " + resp.body.errors;
+      if (this.events) {
+        this.events.emitMetric({
+          kind: "event",
+          title: "Partial Content",
+          text: err,
+          tags: tags
+        });
+      }
+
+      if (!this.launchDarkly) {
+        if (this.events) {
+          this.events.emitMetric({
+            kind: "event",
+            title: "LaunchDarkly undefined",
+            text: "Launchdarkly is undefined",
+            tags: tags
+          });
+        }
+        return Promise.resolve(resultOK);
+      }
+
+      return this.launchDarkly
+        .toggle("kit-deploymentizer-90-fail-deploy-envs")
+        .then(isEnabled => {
+          tags.feature_name = "kit-deploymentizer-90-fail-deploy-envs";
+          this.events.emitMetric({
+            kind: "increment",
+            name: isEnabled ? "feature.enabled" : "feature.disabled",
+            tags: tags
+          });
+          if (isEnabled) {
+            logger.debug(
+              "enabled kit-deploymentizer-90-fail-deploy-envs: rejecting deployment..."
+            );
+            resultErr.message = err;
+            throw resultErr;
+          }
+          logger.debug(
+            "disabled kit-deploymentizer-90-fail-deploy-envs: continue deployment..."
+          );
+          return resultOK;
+        });
+    }
+    Promise.reject(resultErr);
   }
 }
 
