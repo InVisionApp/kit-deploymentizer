@@ -218,7 +218,7 @@ class EnvApiClient {
    */
   callv4Api(params) {
     const uri = `${this
-      .apiUrl}/v4/resources/${params.service}/deployment-environments/${params.environment}?ref=${params.ref}`;
+      .apiUrl}/v4/resources/${params.service}/deployment-environments/${params.cluster}?ref=${params.ref}`;
     let options = {
       method: "GET",
       uri: uri,
@@ -298,8 +298,6 @@ class EnvApiClient {
    * @returns - returns Promise that resolves to an resultOK or resultErr object
    */
   parseResponse(resp, envapiVersion, tags) {
-    console.log("\n\nDEBUG tags:");
-    console.log(tags);
     if (this.events) {
       this.events.emitMetric({
         kind: "increment",
