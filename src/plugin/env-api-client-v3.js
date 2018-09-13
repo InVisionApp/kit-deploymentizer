@@ -363,6 +363,10 @@ class EnvApiClient {
     Promise.reject(resultErr);
   }
 
+  /**
+   * Set the _tags property for this class with the provided map
+   * @param {object} baseTags - key value map for base tags
+   */
   _setBaseTags(baseTags) {
     if (typeof baseTags !== "object" || baseTags === null) {
       this._tags = {};
@@ -370,10 +374,18 @@ class EnvApiClient {
     this._tags = Object.assign({}, baseTags);
   }
 
+  /**
+   * Returns a copy of the current _tags object
+   */
   _getBaseTags() {
     return Object.assign({}, this._tags);
   }
 
+  /**
+   * Adds a tag to the _tags object for this client
+   * @param {string} tagKey
+   * @param {string} tagValue
+   */
   _addBaseTag(tagKey, tagValue) {
     this._tags[tagKey] = tagValue;
   }
