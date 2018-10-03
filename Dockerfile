@@ -1,4 +1,4 @@
-FROM node:6.11.5-alpine
+FROM node:6.14.4-alpine
 
 # Install node modules (allows for npm install to be cached until package.json changes)
 COPY .npmrc .npmrc
