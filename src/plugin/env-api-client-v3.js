@@ -50,6 +50,14 @@ class EnvApiClient {
   }
 
   /**
+   * This overrides the provided resource name for fetching env vars from envapi
+   * https://invisionapp.atlassian.net/browse/EV-1429
+   */
+  static get annotationResourceName() {
+    return "kit-deploymentizer/env-api-resource";
+  }
+
+  /**
 	 * The provided service resource needs to contain an annotation specifiying the service name
 	 * to use when invoking the env-api service. If this annotation is not present the request
 	 * is skipped. The annotation is `kit-deploymentizer/env-api-service: [GIT-HUB-PROJECT-NAME]`
@@ -113,7 +121,6 @@ class EnvApiClient {
       }
 
       let params = {
-        service: service.annotations[EnvApiClient.annotationServiceName],
         environment: cluster.metadata().environment,
         cluster: cluster.name(),
         metadata: metadata,
@@ -134,9 +141,12 @@ class EnvApiClient {
 
       let resp;
       if (envapiVersion === envAPIV4) {
+        params.service = this.getResourceName(service);
         tags.envapi_version = envAPIV4;
         resp = yield this.callv4Api(params);
       } else {
+        params.service =
+          service.annotations[EnvApiClient.annotationServiceName];
         resp = yield this.callv3Api(params);
       }
 
@@ -178,6 +188,17 @@ class EnvApiClient {
       }
       throw new Error(errMsg);
     });
+  }
+
+  /**
+   * Returns service name
+   * @param {object} service 
+   */
+  getResourceName(service) {
+    if (service.annotations[EnvApiClient.annotationResourceName]) {
+      return service.annotations[EnvApiClient.annotationResourceName];
+    }
+    return service.resourceName;
   }
 
   /**
