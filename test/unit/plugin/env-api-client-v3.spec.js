@@ -12,7 +12,7 @@ chai.use(chaiAsPromised);
 chai.should();
 const expect = chai.expect;
 
-describe.only("ENV API Client Configuration plugin", () => {
+describe("ENV API Client Configuration plugin", () => {
   let ApiConfig;
 
   before(() => {
@@ -233,7 +233,7 @@ describe.only("ENV API Client Configuration plugin", () => {
     });
   });
 
-  describe.only("Api V4 Calls", () => {
+  describe("Api V4 Calls", () => {
     const envsResult = [
       {
         name: "SUBDOMAIN_REGEX",
