@@ -48,7 +48,7 @@ class Generator {
 	 * @param	{[type]} exportPath				 Where to save files
 	 * @param	{[type]} save							 Save or not
 	 * @param	{[type]} configPlugin			 Plugin to use for loading configuration information
-	 * @param	{[type]} resource 				 Resource to process
+	 * @param	{string} resource 				 Resource name to process
 	 * @param	{[type]} eventHandler 		 To log events to
 	 * @param	{[type]} deployId					 DeployId to use when generating manifests, switch to uuid from elroy
 	 * @param	{[type]} fastRollback			 Determines if fastRollback support is enabled. used by manifest generation
@@ -243,6 +243,8 @@ class Generator {
         let containerName = containers[i].name;
         // make sure the name is set
         artifact.name = artifact.name || resourceName;
+        // reliably provide resourceName
+        artifact.resourceName = resourceName;
         localConfig[containerName] = artifact;
         // If we have a plugin use it to load env and other config values
         if (self.configPlugin) {
@@ -522,7 +524,7 @@ class Generator {
 
   /**
 	 * Renders the resource file and saves to the output directory.
-	 * @param	{[type]} resource		 to process
+	 * @param	{object} resource		 to process
 	 * @param	{[type]} localConfig	data to use when rendering templat
 	 * @param	{[type]} fileStats		file information
 	 * @return {[type]}					 [description]

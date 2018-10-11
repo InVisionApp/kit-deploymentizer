@@ -12,7 +12,7 @@ chai.use(chaiAsPromised);
 chai.should();
 const expect = chai.expect;
 
-describe("ENV API Client Configuration plugin", () => {
+describe.only("ENV API Client Configuration plugin", () => {
   let ApiConfig;
 
   before(() => {
@@ -85,6 +85,7 @@ describe("ENV API Client Configuration plugin", () => {
 
     const testrosieService = {
       name: "testrosie",
+      resourceName: "test-service",
       annotations: {
         "kit-deploymentizer/env-api-service": "node-test-rosie",
         "kit-deploymentizer/env-api-branch": "master"
@@ -92,6 +93,7 @@ describe("ENV API Client Configuration plugin", () => {
     };
     const testService = {
       name: "test-service",
+      resourceName: "test-service",
       annotations: {
         "kit-deploymentizer/env-api-service": "test-service",
         "kit-deploymentizer/env-api-branch": "master"
@@ -231,7 +233,7 @@ describe("ENV API Client Configuration plugin", () => {
     });
   });
 
-  describe("Api V4 Calls", () => {
+  describe.only("Api V4 Calls", () => {
     const envsResult = [
       {
         name: "SUBDOMAIN_REGEX",
@@ -302,6 +304,7 @@ describe("ENV API Client Configuration plugin", () => {
 
     const testService = {
       name: "test-service",
+      resourceName: "test-service",
       annotations: {
         "kit-deploymentizer/env-api-service": "test-service",
         "kit-deploymentizer/env-api-branch": "master"
@@ -361,6 +364,74 @@ describe("ENV API Client Configuration plugin", () => {
         .fetch(testService, clusterDef)
         .should.be.fulfilled.then(envs => {
           expect(rp.callCount).to.equal(1);
+          expect(rp.firstCall.args[0].uri).to.include(
+            "https://envapi.tools.shared-multi.k8s.invision.works/api/v4/resources/test-service"
+          );
+          expect(envs).to.deep.equal({
+            env: envsResult
+          });
+          expect(sentMetric).to.equal(true);
+        });
+    });
+
+    it("should use the resource annotation if it exists", () => {
+      var rp = sinon.stub();
+      rp.onFirstCall().returns(resV4Valid);
+
+      const testService = {
+        name: "test-service",
+        resourceName: "test-service",
+        annotations: {
+          "kit-deploymentizer/env-api-service": "test-service",
+          "kit-deploymentizer/env-api-resource": "other-service",
+          "kit-deploymentizer/env-api-branch": "master"
+        }
+      };
+
+      const events = new EventHandler();
+      let sentMetric = false;
+      events.on("metric", function(msg) {
+        sentMetric = true;
+      });
+
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
+
+      const options = {
+        launchDarkly: {
+          toggle: function() {
+            return Promise.resolve(true);
+          }
+        },
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: false,
+        commitId: "shahahahaha",
+        events: events
+      };
+
+      const apiConfig = new ApiConfig(options);
+      apiConfig.request = rp;
+
+      apiConfig
+        .fetch(testService, clusterDef)
+        .should.be.fulfilled.then(envs => {
+          expect(rp.callCount).to.equal(1);
+          expect(rp.firstCall.args[0].uri).to.include(
+            "https://envapi.tools.shared-multi.k8s.invision.works/api/v4/resources/other-service"
+          );
           expect(envs).to.deep.equal({
             env: envsResult
           });
@@ -412,6 +483,9 @@ describe("ENV API Client Configuration plugin", () => {
         .fetch(testService, clusterDef)
         .should.be.fulfilled.then(envs => {
           expect(rp.callCount).to.equal(1);
+          expect(rp.firstCall.args[0].uri).to.include(
+            "https://envapi.tools.shared-multi.k8s.invision.works/api/v3"
+          );
           expect(envs).to.deep.equal({
             env: [
               { name: "GET_HOSTS_FROM", value: "dns" },
