@@ -1,18 +1,20 @@
 - name: Tests
   type: parallel
-  service: app
   encrypted_dockercfg_path: codeship-dockercfg.encrypted
   steps:
-    # TODO: disable eslint until eslint-config-invision package is public
-    # - name: Run lint tests
-    #   service: app
-    #   command: lint
     - name: Format
+      service: app
       command: format
     - name: Run unit tests
+      service: app
       command: test-unit
     - name: Run functional tests
+      service: app
       command: test-functional
+    - name: Execute for monitor and test
+      service: snyk
+      exclude: ^(master)$
+      command: /bin/sh -c "snyk monitor; snyk test || echo 'WARNING! Snyk found at least one vulnerable dependency, ignoring for now.'"
 
 - name: Registry
   type: serial
