@@ -8,6 +8,13 @@ app:
     - example:/example
     - test:/test
     #- generated:/generated
+
+snyk:
+  build:
+    dockerfile_path: Dockerfile.snyk
+  encrypted_env_file: codeship.env.encrypted
+  cached: true
+
 publish:
   image: quay.io/invision/docker-node-publisher:v1
   encrypted_env_file: codeship-publish.env.encrypted
