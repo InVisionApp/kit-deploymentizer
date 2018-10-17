@@ -33,7 +33,7 @@
     "fs-extra": "0.30.0",
     "glob-promise": "1.0.6",
     "js-yaml": "3.5.2",
-    "lodash": "4.3.0",
+    "lodash": "4.17.5",
     "log4js": "0.6.33",
     "mockery": "2.0.0",
     "mustache": "2.2.1",
