@@ -129,7 +129,8 @@ class EnvApiClient {
         app: "kit_deploymentizer",
         envapi_environment: params.environment,
         envapi_cluster: params.cluster,
-        envapi_version: envAPIV3
+        envapi_version: envAPIV3,
+        kit_resource: params.service
       };
 
       const envapiVersion = yield this.determineApiVersionCall(tags);
