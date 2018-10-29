@@ -35,7 +35,6 @@ class EnvApiClient {
     this.request = rp;
     this.events = options.events || undefined;
     this.launchDarkly = options.launchDarkly || undefined;
-    this.ref = options.commitId || "master";
   }
 
   /**
@@ -123,18 +122,14 @@ class EnvApiClient {
       let params = {
         environment: cluster.metadata().environment,
         cluster: cluster.name(),
-        metadata: metadata,
-        ref: this.ref
+        metadata: metadata
       };
 
       let tags = {
         app: "kit_deploymentizer",
         envapi_environment: params.environment,
         envapi_cluster: params.cluster,
-        envapi_resource: params.service,
-        envapi_version: envAPIV3,
-        kit_resource: params.service,
-        envapi_resource_ref: this.ref
+        envapi_version: envAPIV3
       };
 
       const envapiVersion = yield this.determineApiVersionCall(tags);
@@ -142,11 +137,24 @@ class EnvApiClient {
       let resp;
       if (envapiVersion === envAPIV4) {
         params.service = this.getResourceName(service);
+        params.ref = this.getGitRef(
+          service.resourceName,
+          params.service,
+          service.gitRef
+        );
+
+        tags.envapi_resource_ref = params.ref;
+        tags.envapi_resource = params.service;
         tags.envapi_version = envAPIV4;
+
         resp = yield this.callv4Api(params);
       } else {
         params.service =
           service.annotations[EnvApiClient.annotationServiceName];
+
+        tags.envapi_resource_ref = "master";
+        tags.envapi_resource = params.service;
+
         resp = yield this.callv3Api(params);
       }
 
@@ -191,11 +199,44 @@ class EnvApiClient {
   }
 
   /**
+   * Determine which gitRef to use if the resource name resolved via the getResourceName function
+   * doesn't match the resource name passed in then we can't reliably use the provided gitReference
+   * because it may reference the wrong git repo and should instead default to master
+   * @param {string} nameFromRequest - the resourceName passed into the fetch request
+   * @param {string} resolvedResourceName - the resource name determined by the getResourceName method
+   * @param {string} gitRef - the git reference passed into the fetch request
+   * @return {string} - the git reference to use for the envapi request
+   */
+  getGitRef(nameFromRequest, resolvedResourceName, gitRef) {
+    if (nameFromRequest !== resolvedResourceName || !gitRef) {
+      if (this.events) {
+        this.events.emitInfo(
+          "resourceName was set by annotation defaulting to master for the env-api call"
+        );
+      }
+      return "master";
+    }
+    if (this.events) {
+      this.events.emitInfo(
+        `using git ref ${gitRef} for the env-api call ref paramter`
+      );
+    }
+    return gitRef;
+  }
+
+  /**
    * Returns service name
    * @param {object} service 
    */
   getResourceName(service) {
     if (service.annotations[EnvApiClient.annotationResourceName]) {
+      if (this.events) {
+        this.events.emitDebug(
+          `resourceName was set to ${service.annotations[
+            EnvApiClient.annotationResourceName
+          ]} for the env-api call by annotation`
+        );
+      }
       return service.annotations[EnvApiClient.annotationResourceName];
     }
     return service.resourceName;
