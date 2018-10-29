@@ -245,6 +245,7 @@ class Generator {
         artifact.name = artifact.name || resourceName;
         // reliably provide resourceName
         artifact.resourceName = resourceName;
+        artifact.gitRef = self.options.commitId;
         localConfig[containerName] = artifact;
         // If we have a plugin use it to load env and other config values
         if (self.configPlugin) {
