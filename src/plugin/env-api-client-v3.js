@@ -376,7 +376,7 @@ class EnvApiClient {
       resultOK.env = this.convertEnvResult(resp.body.values);
     }
 
-    const resultErr = {
+    let resultErr = {
       message: resp.body.message || "No error message supplied",
       statusCode: resp.statusCode
     };
@@ -386,7 +386,7 @@ class EnvApiClient {
     }
 
     if (resp.statusCode === 206) {
-      const err = "Success with partial content: " + resp.body.errors;
+      const err = this.getPartialContentError(resp.body, envapiVersion);
       if (this.events) {
         this.events.emitMetric({
           kind: "event",
@@ -430,7 +430,16 @@ class EnvApiClient {
           return resultOK;
         });
     }
-    Promise.reject(resultErr);
+    return Promise.reject(resultErr);
+  }
+
+  getPartialContentError(body, envapiVersion) {
+    let partialErrPrefix = "Success with partial content: ";
+    if (envapiVersion === envAPIV3) {
+      return partialErrPrefix + body.errors;
+    }
+
+    return partialErrPrefix + body.message;
   }
 }
 

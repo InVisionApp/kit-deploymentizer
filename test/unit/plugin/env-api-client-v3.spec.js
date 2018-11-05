@@ -82,6 +82,27 @@ describe("ENV API Client Configuration plugin", () => {
       });
     });
 
+    const resV3PartialResponse = new Promise((resolve, reject) => {
+      resolve({
+        statusCode: 206,
+        body: {
+          status: "success with partial content",
+          values: {
+            GET_HOSTS_FROM: "dns",
+            MAX_RETRIES: "0",
+            MEMBER_HOSTS:
+              "mongoreplica-01-svc:27017,mongoreplica-02-svc:27017,mongoreplica-03-svc:27017",
+            REPLICA_SET_NAME: "rs0",
+            WAIT_TIME: "60000"
+          },
+          errors: [
+            "this key was expected but didn't exist",
+            "also another key that didn't exist"
+          ]
+        }
+      });
+    });
+
     const testrosieService = {
       name: "testrosie",
       resourceName: "test-service",
@@ -230,6 +251,55 @@ describe("ENV API Client Configuration plugin", () => {
           );
         });
     });
+
+    it("should fail when there's a partial response from v3", () => {
+      var rp = sinon.stub();
+      rp.onFirstCall().returns(resV3PartialResponse);
+      const events = new EventHandler();
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }],
+        supportFallback: false
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
+
+      const options = {
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        launchDarkly: {
+          toggle: function(flagName) {
+            if (flagName === "kit-deploymentizer-90-fail-deploy-envs") {
+              return Promise.resolve(true);
+            }
+            return Promise.resolve(false);
+          }
+        },
+        events: events
+      };
+      const apiConfig = new ApiConfig(options);
+      apiConfig.request = rp;
+
+      return apiConfig
+        .fetch(testService, clusterDef)
+        .should.be.rejected.then(err => {
+          expect(rp.callCount).to.equal(1);
+          expect(rp.firstCall.args[0].uri).to.include(
+            "https://envapi.tools.shared-multi.k8s.invision.works/api/v3/vars"
+          );
+          expect(err.message).to.equal(
+            "Success with partial content: this key was expected but didn't exist,also another key that didn't exist"
+          );
+        });
+    });
   });
 
   describe("Api V4 Calls", () => {
@@ -272,6 +342,17 @@ describe("ENV API Client Configuration plugin", () => {
         body: {
           status: "success",
           values: envsResult
+        }
+      });
+    });
+
+    const resV4PartialResponse = new Promise((resolve, reject) => {
+      resolve({
+        statusCode: 206,
+        body: {
+          status: "success with partial content",
+          values: envsResult,
+          message: "missing some env vars"
         }
       });
     });
@@ -567,6 +648,61 @@ describe("ENV API Client Configuration plugin", () => {
           });
           expect(sentMetric).to.equal(true);
         });
+    });
+
+    it("should return message when there's a partial response from envapi", () => {
+      var rp = sinon.stub();
+      rp.onFirstCall().returns(resV4PartialResponse);
+
+      const events = new EventHandler();
+      let sentMetric = false;
+      events.on("metric", function(msg) {
+        sentMetric = true;
+      });
+
+      const cluster = {
+        kind: "ClusterNamespace",
+        metadata: {
+          name: "staging-cluster",
+          type: "staging",
+          environment: "staging",
+          domain: "somewbesite.com",
+          restricted: true
+        }
+      };
+      const config = {
+        kind: "ResourceConfig",
+        env: [{ name: "a", value: 1 }, { name: "b", value: 2 }]
+      };
+      const clusterDef = new ClusterDefinition(cluster, config);
+
+      const options = {
+        launchDarkly: {
+          toggle: function() {
+            return Promise.resolve(true);
+          }
+        },
+        apiUrl: "https://envapi.tools.shared-multi.k8s.invision.works/api",
+        supportFallback: false,
+        events: events
+      };
+
+      const apiConfig = new ApiConfig(options);
+      apiConfig.request = rp;
+
+      apiConfig.fetch(testService, clusterDef).should.be.rejected.then(err => {
+        expect(rp.callCount).to.equal(1);
+        expect(rp.firstCall.args[0].uri).to.include(
+          "https://envapi.tools.shared-multi.k8s.invision.works/api/v4/resources/test-service"
+        );
+        expect(rp.firstCall.args[0].uri).to.include(
+          `ref=${testService.gitRef}`
+        );
+        expect(err.message).to.equal(
+          "Success with partial content: missing some env vars"
+        );
+        expect(sentMetric).to.equal(true);
+      });
     });
   });
 });
