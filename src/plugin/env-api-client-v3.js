@@ -353,6 +353,10 @@ class EnvApiClient {
     return envs;
   }
 
+  processV4Response(values) {
+    return values.sort(this.compareEnvNames);
+  }
+
   /**
    * Parses the response from the env-api request
    * @param {object} resp - env-api response object
@@ -371,7 +375,7 @@ class EnvApiClient {
 
     let resultOK = {};
     if (envapiVersion === envAPIV4) {
-      resultOK.env = resp.body.values;
+      resultOK.env = this.processV4Response(resp.body.values);
     } else {
       resultOK.env = this.convertEnvResult(resp.body.values);
     }
@@ -431,6 +435,22 @@ class EnvApiClient {
         });
     }
     return Promise.reject(resultErr);
+  }
+
+  /**
+   * A compare function for use in sorting the env var response from envapi
+   * so that env vars are consistently in the same order
+   * @param {object} a - env var response object
+   * @param {object} b - env var response object
+   */
+  compareEnvNames(a, b) {
+    if (a.name.toLowerCase() < b.name.toLowerCase()) {
+      return -1;
+    }
+    if (a.name.toLowerCase() > b.name.toLowerCase()) {
+      return 1;
+    }
+    return 0;
   }
 
   getPartialContentError(body, envapiVersion) {
