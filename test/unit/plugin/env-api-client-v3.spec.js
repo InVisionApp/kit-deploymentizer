@@ -453,6 +453,11 @@ describe("ENV API Client Configuration plugin", () => {
           expect(envs).to.deep.equal({
             env: envsResult
           });
+          expect(envs.env[0].name).to.equal("EMAIL_CUSTOMER_SUCCESS");
+          expect(envs.env[1].name).to.equal("FREEHAND_API_URL");
+          expect(envs.env[2].name).to.equal("MONGO_DB");
+          expect(envs.env[3].name).to.equal("ROOKOUT_TOKEN");
+          expect(envs.env[4].name).to.equal("SUBDOMAIN_REGEX");
           expect(sentMetric).to.equal(true);
         });
     });
@@ -518,6 +523,11 @@ describe("ENV API Client Configuration plugin", () => {
             env: envsResult
           });
           expect(sentMetric).to.equal(true);
+          expect(envs.env[0].name).to.equal("EMAIL_CUSTOMER_SUCCESS");
+          expect(envs.env[1].name).to.equal("FREEHAND_API_URL");
+          expect(envs.env[2].name).to.equal("MONGO_DB");
+          expect(envs.env[3].name).to.equal("ROOKOUT_TOKEN");
+          expect(envs.env[4].name).to.equal("SUBDOMAIN_REGEX");
         });
     });
 
@@ -583,6 +593,11 @@ describe("ENV API Client Configuration plugin", () => {
             env: envsResult
           });
           expect(sentMetric).to.equal(true);
+          expect(envs.env[0].name).to.equal("EMAIL_CUSTOMER_SUCCESS");
+          expect(envs.env[1].name).to.equal("FREEHAND_API_URL");
+          expect(envs.env[2].name).to.equal("MONGO_DB");
+          expect(envs.env[3].name).to.equal("ROOKOUT_TOKEN");
+          expect(envs.env[4].name).to.equal("SUBDOMAIN_REGEX");
         });
     });
 

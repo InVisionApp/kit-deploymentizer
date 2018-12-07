@@ -3,7 +3,8 @@
 const expect = require("chai").expect;
 const exec = require("child_process").exec;
 
-describe("Deploymentizer", () => {
+describe("Deploymentizer", function() {
+  this.timeout(10000);
   describe("shell script", () => {
     it("should run successfully", done => {
       process.env.SECRET_USERNAME = "myusername";
