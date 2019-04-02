@@ -1,4 +1,7 @@
 # kit-deploymentizer
+**[DEPRECATED] Thanks for using this package, but we will no longer support it.**
+
+
 ![Team](https://img.shields.io/badge/team-container_application_lifecycle-lightgrey.svg)
 ![Status](https://img.shields.io/badge/status-live-green.svg)
 [![Slack](https://img.shields.io/badge/slack-%23docker--kubernetes-blue.svg)](https://invisionapp.slack.com/messages/docker-kubernetes/)
