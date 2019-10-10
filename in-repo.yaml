@@ -1,3 +1,4 @@
+visibility: private
 owner:
   active:
     team: engineering-velocity
